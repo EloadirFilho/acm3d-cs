@@ -1956,7 +1956,11 @@ function readAcmStudioInputs() {
     bendFactor: Math.max(0, Number(document.getElementById('inpAcmBendFactor')?.value || 1.5)),
     fresa: document.getElementById('selAcmFresa')?.value || 'V90',
     cornerTrat: document.getElementById('selAcmCornerTrat')?.value || 'esquadria',
-    syncJuntas: Boolean(document.getElementById('chkAcmSyncJuntas')?.checked)
+    syncJuntas: Boolean(document.getElementById('chkAcmSyncJuntas')?.checked),
+    fastenerType: document.getElementById('selAcmFastenerType')?.value || 'F003',
+    fastenerSpacing: Math.max(100, Number(document.getElementById('inpAcmFastenerSpacing')?.value || 400)),
+    vhbType: document.getElementById('selAcmVhbType')?.value || '3M_VHB_1.1',
+    sealant: document.getElementById('selAcmSealant')?.value || 'PU40_CINZA'
   };
 }
 
@@ -2153,6 +2157,28 @@ function computeAcmStudioModel(cfg) {
 
   const totalLinearM = Math.round((tubes.reduce((acc, t) => acc + t.len, 0) / 1000) * 100) / 100;
 
+  // Cálculo de Ferragens, Colagem VHB e Fixadores (Módulos M3, M4 e M8)
+  const trayPerimM = (2 * (trayW + trayH)) / 1000;
+  const singleTrayTapeM = trayPerimM;
+  const totalTapeM = Math.round(singleTrayTapeM * totalTrays * 10) / 10;
+  const vhbRolls = Math.max(1, Math.ceil(totalTapeM / 33));
+  const primerCans = Math.max(1, Math.ceil(totalTapeM / 100));
+
+  const cantoneirasPerTray = Math.max(4, Math.floor((2 * (trayW + trayH)) / (cfg.fastenerSpacing || 400)));
+  const totalCantoneiras = cantoneirasPerTray * totalTrays;
+  const totalScrews = (totalCantoneiras * 2) + (totalBarsCount * 4);
+  const totalSealantTubes = Math.max(1, Math.ceil(((cfg.cols * (cfg.rows - 1) + cfg.rows * (cfg.cols - 1)) * 1.5) / 10));
+
+  const bom = {
+    vhbTapeM: totalTapeM,
+    vhbRolls,
+    primerCans,
+    cantoneirasPerTray,
+    totalCantoneiras,
+    totalScrews,
+    totalSealantTubes
+  };
+
   return {
     cfg,
     W,
@@ -2169,7 +2195,8 @@ function computeAcmStudioModel(cfg) {
     totalAcmAreaM2,
     barsByProfile,
     totalBarsCount,
-    totalLinearM
+    totalLinearM,
+    bom
   };
 }
 
@@ -2239,7 +2266,52 @@ function renderAcm360Studio() {
         <td><strong>Planificada: ${model.flatW} × ${model.flatH} mm (${model.totalAcmAreaM2} m²)</strong></td>
       </tr>
     `);
+    if (model.bom) {
+      rowsHtml.push(`
+        <tr>
+          <th>Ferragens &amp; Fixadores</th>
+          <td>Cantoneiras (${cfg.fastenerType || 'F003'}) + Parafusos 4.2x19</td>
+          <td>${model.bom.totalCantoneiras} cantoneiras · ${model.bom.totalScrews} parafusos</td>
+          <td><strong>Colagem: ${model.bom.vhbRolls} rolos 3M VHB (${model.bom.vhbTapeM}m)</strong></td>
+        </tr>
+      `);
+    }
     tbody.innerHTML = rowsHtml.join('');
+  }
+
+  // Renderizar Quadro de Resumo de Ferragens e Materiais (M3, M4, M8)
+  const bomBox = document.getElementById('acmBomSummaryBox');
+  if (bomBox && model.bom) {
+    const b = model.bom;
+    bomBox.innerHTML = `
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;">
+        <div style="background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:6px; border:1px solid #444;">
+          <div style="font-size:0.72rem; color:#94A3B8; font-weight:700;">FITA 3M VHB</div>
+          <strong style="color:#FBBF24; font-size:1.05rem;">${b.vhbRolls} rolos</strong>
+          <div style="font-size:0.7rem; color:#64748B;">(${b.vhbTapeM} metros)</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:6px; border:1px solid #444;">
+          <div style="font-size:0.72rem; color:#94A3B8; font-weight:700;">PRIMER 3M AP111</div>
+          <strong style="color:#38BDF8; font-size:1.05rem;">${b.primerCans} frasco(s)</strong>
+          <div style="font-size:0.7rem; color:#64748B;">(250 ml p/ adesão)</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:6px; border:1px solid #444;">
+          <div style="font-size:0.72rem; color:#94A3B8; font-weight:700;">CANTONEIRAS F003</div>
+          <strong style="color:#34D399; font-size:1.05rem;">${b.totalCantoneiras} un</strong>
+          <div style="font-size:0.7rem; color:#64748B;">(${b.cantoneirasPerTray} un / bandeja)</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:6px; border:1px solid #444;">
+          <div style="font-size:0.72rem; color:#94A3B8; font-weight:700;">PARAFUSOS 4.2x19</div>
+          <strong style="color:#F87171; font-size:1.05rem;">${b.totalScrews} un</strong>
+          <div style="font-size:0.7rem; color:#64748B;">(Autobrocante vedação)</div>
+        </div>
+        <div style="background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:6px; border:1px solid #444;">
+          <div style="font-size:0.72rem; color:#94A3B8; font-weight:700;">SELANTE PU40</div>
+          <strong style="color:#C084FC; font-size:1.05rem;">${b.totalSealantTubes} tubo(s)</strong>
+          <div style="font-size:0.7rem; color:#64748B;">(Cartucho 400g juntas)</div>
+        </div>
+      </div>
+    `;
   }
 }
 
@@ -2483,6 +2555,55 @@ function downloadAcm360Dxf() {
   showToast(`✓ DXF CNC exportado (Camadas: ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_ETIQUETAS)`);
 }
 
+function downloadAcm360Csv() {
+  const m = acmStudioState.lastModel || computeAcmStudioModel(readAcmStudioInputs());
+  const profF = findAcmProfile(m.cfg.profileFrameId);
+  const b = m.bom;
+
+  let csv = '\uFEFF'; // UTF-8 BOM para compatibilidade com Microsoft Excel
+  csv += '# CS ACM360 - RELATÓRIO DE PRODUÇÃO E LISTA DE CORTE\n';
+  csv += `# Projeto;Fachada ACM ${m.W}x${m.H} mm\n`;
+  csv += `# Data;${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
+
+  csv += '--- RESUMO GERAL DE COMPRA E PRODUÇÃO ---\n';
+  csv += 'Item;Especificação;Quantidade;Unidade\n';
+  csv += `Barras de 6000mm;${profF.name};${m.totalBarsCount};un (6m)\n`;
+  csv += `Total Metros Lineares;Tubos Estruturais;${m.totalLinearM};m\n`;
+  csv += `Chapas ACM Planificadas;Área Total Aberta;${m.totalAcmAreaM2};m²\n`;
+  csv += `Bandejas ACM;${m.trayW}x${m.trayH} mm Fechada;${m.totalTrays};un\n`;
+  csv += `Fita Dupla-Face 3M VHB;Rolo 33 metros;${b.vhbRolls};rolos (${b.vhbTapeM} m)\n`;
+  csv += `Primer 3M AP111 / 94;Promotor Adesão 250ml;${b.primerCans};frascos\n`;
+  csv += `Cantoneiras Fixador;Modelo ${m.cfg.fastenerType || 'F003'};${b.totalCantoneiras};un\n`;
+  csv += `Parafusos Autobrocantes;4.2 x 19mm c/ vedação;${b.totalScrews};un\n`;
+  csv += `Selante Fachada PU40;Cartucho 400g;${b.totalSealantTubes};tubos\n\n`;
+
+  csv += '--- LISTA DETALHADA DE CORTE DE TUBOS (SERRA) ---\n';
+  csv += 'Código;Função;Perfil;Comprimento (mm);Corte Esq;Corte Dir\n';
+  m.tubes.forEach((tb) => {
+    csv += `${tb.id};${tb.name};${tb.profile.name};${tb.len};${tb.cutA > 0 ? tb.cutA + '°' : '0°'};${tb.cutB > 0 ? tb.cutB + '°' : '0°'}\n`;
+  });
+  csv += '\n';
+
+  csv += '--- LISTA DE BANDEJAS ACM (CNC ROUTER) ---\n';
+  csv += 'Tag;Largura Fechada (mm);Altura Fechada (mm);Largura Aberta (mm);Altura Aberta (mm);Retorno (mm);Área Aberta (m²);Fresa\n';
+  for (let i = 1; i <= m.totalTrays; i++) {
+    const tag = `P${String(i).padStart(2, '0')}`;
+    const singleArea = ((m.flatW * m.flatH) / 1000000).toFixed(3);
+    csv += `${tag};${m.trayW};${m.trayH};${m.flatW};${m.flatH};${m.cfg.returnMm};${singleArea};${m.cfg.fresa}\n`;
+  }
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ACM360_Relatorio_Producao_${m.W}x${m.H}mm.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast(`✓ Relatório de Materiais e Lista de Corte exportados em CSV (Excel)!`);
+}
+
 function createErpOsFromAcm360() {
   const m = acmStudioState.lastModel || computeAcmStudioModel(readAcmStudioInputs());
   const newId = `OS-${45 + OS_LIST.length}`;
@@ -2502,7 +2623,7 @@ function createErpOsFromAcm360() {
     elapsedSeconds: 0,
     isPaused: false,
     pauseReason: '',
-    obs: `Gerado pelo ACM360 Studio: ${m.totalTrays} bandejas planificadas (${m.flatW}×${m.flatH}mm, fresa ${m.cfg.fresa}) + ${m.tubes.length} tubos (${m.totalBarsCount} barras de 6m, corte ${m.cfg.cornerType}).`,
+    obs: `Gerado pelo ACM360 Studio: ${m.totalTrays} bandejas planificadas (${m.flatW}×${m.flatH}mm, fresa ${m.cfg.fresa}) + ${m.tubes.length} tubos (${m.totalBarsCount} barras de 6m, corte ${m.cfg.cornerType}). Fixadores: ${m.bom.totalCantoneiras} cantoneiras, ${m.bom.vhbRolls} rolos fita VHB.`,
     croquiType: 'fachada',
     stages: [
       { name: 'Criação/Projetos', status: 'done', by: 'ACM360 Studio', duration: 'Automático' },
@@ -2513,7 +2634,10 @@ function createErpOsFromAcm360() {
     ],
     materials: [
       { matId: 'mat-metalon-20', name: `${profFrame.name} (${m.totalBarsCount} barras 6m)`, predicted: m.totalLinearM, used: 0, unit: 'ml' },
-      { matId: 'mat-adesivo-avery', name: `Chapas ACM 3mm Planificadas (${m.totalTrays} pçs)`, predicted: m.totalAcmAreaM2, used: 0, unit: 'm²' }
+      { matId: 'mat-adesivo-avery', name: `Chapas ACM 3mm Planificadas (${m.totalTrays} pçs)`, predicted: m.totalAcmAreaM2, used: 0, unit: 'm²' },
+      { matId: 'mat-vhb-tape', name: `Fita 3M VHB (${m.bom.vhbRolls} rolos de 33m)`, predicted: m.bom.vhbTapeM, used: 0, unit: 'ml' },
+      { matId: 'mat-cantoneiras', name: `Cantoneiras Fixador (${m.cfg.fastenerType || 'F003'})`, predicted: m.bom.totalCantoneiras, used: 0, unit: 'un' },
+      { matId: 'mat-screws', name: `Parafusos Autobrocantes 4.2x19`, predicted: m.bom.totalScrews, used: 0, unit: 'un' }
     ]
   };
   OS_LIST.unshift(newOs);
@@ -2522,28 +2646,30 @@ function createErpOsFromAcm360() {
   renderHeader();
   renderSectorBar();
   renderOSBoard();
-  showToast(`🚀 ${newId} criada no Quadro de Produção com ${m.totalBarsCount} barra(s) e ${m.totalTrays} bandeja(s) ACM!`);
+  showToast(`🚀 ${newId} criada no Quadro de Produção com ${m.totalBarsCount} barra(s), ${m.totalTrays} bandeja(s) ACM e ${m.bom.vhbRolls} rolos VHB!`);
 }
 
 function setupAcm360StudioListeners() {
   const tabFrame = document.getElementById('tabAcmModeFrame');
   const tabTrays = document.getElementById('tabAcmModeTrays');
+  const tabBOM = document.getElementById('tabAcmModeBOM');
   const panelFrame = document.getElementById('acmPanelFrameControls');
   const panelTrays = document.getElementById('acmPanelTrayControls');
+  const panelBOM = document.getElementById('acmPanelBOMControls');
+
+  const switchTab = (activeTab, activePanel) => {
+    [tabFrame, tabTrays, tabBOM].forEach((t) => {
+      if (t) t.setAttribute('aria-pressed', String(t === activeTab));
+    });
+    [panelFrame, panelTrays, panelBOM].forEach((p) => {
+      if (p) p.hidden = (p !== activePanel);
+    });
+  };
 
   if (tabFrame && tabTrays) {
-    tabFrame.addEventListener('click', () => {
-      tabFrame.setAttribute('aria-pressed', 'true');
-      tabTrays.setAttribute('aria-pressed', 'false');
-      panelFrame.hidden = false;
-      panelTrays.hidden = true;
-    });
-    tabTrays.addEventListener('click', () => {
-      tabTrays.setAttribute('aria-pressed', 'true');
-      tabFrame.setAttribute('aria-pressed', 'false');
-      panelTrays.hidden = false;
-      panelFrame.hidden = true;
-    });
+    tabFrame.addEventListener('click', () => switchTab(tabFrame, panelFrame));
+    tabTrays.addEventListener('click', () => switchTab(tabTrays, panelTrays));
+    if (tabBOM) tabBOM.addEventListener('click', () => switchTab(tabBOM, panelBOM));
   }
 
   document.querySelectorAll('[data-acm-canvas]').forEach((btn) => {
@@ -2562,7 +2688,8 @@ function setupAcm360StudioListeners() {
     'inpAcmTravH', 'selAcmBarStrategy', 'selAcmMaterial', 'selAcmColorMode',
     'inpAcmGridCols', 'inpAcmGridRows', 'inpAcmJointMm', 'selAcmEdgeType',
     'inpAcmReturnMm', 'inpAcmAbaMm', 'inpAcmBendFactor', 'selAcmFresa',
-    'selAcmCornerTrat', 'chkAcmSyncJuntas'
+    'selAcmCornerTrat', 'chkAcmSyncJuntas', 'selAcmFastenerType',
+    'inpAcmFastenerSpacing', 'selAcmVhbType', 'selAcmSealant'
   ];
   inputIds.forEach((id) => {
     const el = document.getElementById(id);
@@ -2588,6 +2715,7 @@ function setupAcm360StudioListeners() {
   });
 
   document.getElementById('btnAcmExportDxf')?.addEventListener('click', downloadAcm360Dxf);
+  document.getElementById('btnAcmExportCsv')?.addEventListener('click', downloadAcm360Csv);
   document.getElementById('btnAcmCreateErpOS')?.addEventListener('click', createErpOsFromAcm360);
 
   document.getElementById('inpAcmImportJson')?.addEventListener('change', (e) => {

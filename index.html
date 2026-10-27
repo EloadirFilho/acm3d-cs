@@ -363,6 +363,9 @@
               <button type="button" class="submode-pill" id="tabAcmModeTrays" aria-pressed="false">
                 2. Bandejas ACM &amp; Planificação
               </button>
+              <button type="button" class="submode-pill" id="tabAcmModeBOM" aria-pressed="false">
+                3. Materiais, VHB &amp; Fixadores
+              </button>
             </div>
 
             <!-- PAINEL 1: ESTRUTURAS METÁLICAS (A002 CORTE RETO / A003 MEIA-ESQUADRIA) -->
@@ -521,6 +524,51 @@
               </div>
             </div>
 
+            <!-- PAINEL 3: MATERIAIS, COLAGEM VHB & FIXADORES (M3, M4 & M8) -->
+            <div id="acmPanelBOMControls" class="acm360-form-scroll" hidden>
+              <div class="acm-form-grid-2">
+                <div class="acm-field">
+                  <label for="selAcmFastenerType">TIPO DE FIXADOR</label>
+                  <select id="selAcmFastenerType">
+                    <option value="F003" selected>Cantoneira Fixador (F003)</option>
+                    <option value="F001">Ancoragem (F001)</option>
+                    <option value="F002">Espera Regulável (F002)</option>
+                  </select>
+                </div>
+                <div class="acm-field">
+                  <label for="inpAcmFastenerSpacing">ESPAÇAMENTO FIXADORES (MM)</label>
+                  <input type="number" id="inpAcmFastenerSpacing" value="400" min="200" max="1000" step="50">
+                </div>
+              </div>
+
+              <div class="acm-form-grid-2">
+                <div class="acm-field">
+                  <label for="selAcmVhbType">FITA DUPLA-FACE ESTRUTURAL</label>
+                  <select id="selAcmVhbType">
+                    <option value="3M_VHB_1.1" selected>3M VHB 4910 / GBN (1.1 mm)</option>
+                    <option value="3M_VHB_1.6">3M VHB 4941 (1.6 mm)</option>
+                    <option value="3M_VHB_2.0">3M VHB 4955 (2.0 mm)</option>
+                  </select>
+                </div>
+                <div class="acm-field">
+                  <label for="selAcmSealant">SELANTE DE JUNTAS</label>
+                  <select id="selAcmSealant">
+                    <option value="PU40_CINZA" selected>Silicone / PU40 Cinza Fachada (400g)</option>
+                    <option value="PU40_PRETO">Silicone / PU40 Preto Fachada (400g)</option>
+                    <option value="PU40_BRANCO">Silicone / PU40 Branco Fachada (400g)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Quadro de Resumo de Compras / Hardware Calculado -->
+              <div class="acm-field" style="margin-top: 10px;">
+                <label>RESUMO CALCULADO DE FERRAGENS &amp; CONSUMÍVEIS</label>
+                <div id="acmBomSummaryBox" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-subtle, #333); border-radius: 8px; padding: 12px; font-size: 0.85rem; line-height: 1.6; color: var(--text-secondary, #ccc);">
+                  Carregando resumo de materiais...
+                </div>
+              </div>
+            </div>
+
             <!-- Botões de Ação e Integração SketchUp + ERP -->
             <div class="acm360-actions-footer">
               <div class="acm-btn-row">
@@ -529,6 +577,9 @@
                 </button>
                 <button type="button" class="acm-action-btn secondary" id="btnAcmExportDxf" title="Gera arquivo DXF AC1009 com camadas ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_DIRECAO e ACM_ETIQUETAS">
                   📐 Baixar DXF CNC
+                </button>
+                <button type="button" class="acm-action-btn secondary" id="btnAcmExportCsv" title="Exporta Relatório de Materiais e Lista de Corte em CSV para Microsoft Excel">
+                  📊 Baixar CSV (Excel)
                 </button>
                 <a href="CS_ACM360_v1.0.0.rbz" download="CS_ACM360_v1.0.0.rbz" class="acm-action-btn secondary" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
                   📦 Plugin .RBZ
