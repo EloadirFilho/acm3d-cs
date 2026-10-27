@@ -29,6 +29,13 @@ const ACM360_DEFAULT_SETTINGS = {
     { id: 'generico_3', name: 'Genérico 3 mm', thickness_mm: 3, bend_factor_mm: 1.5 },
     { id: 'generico_4', name: 'Genérico 4 mm', thickness_mm: 4, bend_factor_mm: 2 }
   ],
+  // M5: tubo avulso estende até encostar no vizinho se o vão for até este valor
+  interference_max_extend_mm: 50,
+  // M6: folga por lado dos recortes automáticos e distância mínima até a dobra (aviso)
+  cutout_clearance_mm: 5,
+  cutout_fold_warn_mm: 20,
+  // Lado da chapa visto no DXF: frente (padrão) ou verso (espelhado, CNC fresando por trás)
+  flat_view: 'frente',
   // Fixadores (M4): cantoneira bandeja → estrutura usa spacing/offset; ancoragem e espera
   // (estrutura → parede) usam anchor_*; standoff_mm é o afastamento da espera até a parede
   fastener_spacing_mm: 400,
@@ -73,7 +80,10 @@ const ACM360_NUMERIC_RANGES = {
   fastener_offset_mm: [0, 500],
   anchor_spacing_mm: [100, 3000],
   anchor_margin_mm: [0, 1000],
-  standoff_mm: [10, 500]
+  standoff_mm: [10, 500],
+  interference_max_extend_mm: [0, 500],
+  cutout_clearance_mm: [0, 100],
+  cutout_fold_warn_mm: [0, 200]
 };
 
 const ACM360_FASTENER_RANGES = {
@@ -122,6 +132,7 @@ function normalizeAcmSettings(raw) {
   if (!['tipo', 'comprimento', 'unica'].includes(out.color_mode)) out.color_mode = 'tipo';
   if (!['PE', 'FR'].includes(out.acm_core)) out.acm_core = 'PE';
   if (!['V90', 'V135', 'U'].includes(out.fresa_type)) out.fresa_type = 'V90';
+  if (!['frente', 'verso'].includes(out.flat_view)) out.flat_view = 'frente';
 
   const validList = (list, fallback) => {
     const items = (Array.isArray(list) ? list : []).filter((i) => i && i.id && i.name);

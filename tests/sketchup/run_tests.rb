@@ -250,6 +250,174 @@ module CSBetaTests
         ok = File.exist?(csv) && File.read(csv, mode: 'rb').start_with?("\xEF\xBB\xBF".b) && File.binread(xlsx) == 'PK teste'
         check('salvar arquivos do relatório (Ruby)', ok)
       end
+
+      run_interference(model)
+      run_cutouts(model)
+    end
+
+    # --------------------------------------------------------------------------
+    # M5: corte nas interferências (longe das outras peças, em x = 30 m)
+    # --------------------------------------------------------------------------
+    def place_tube(name, len, tr)
+      g = P::FrameKernel.create_single_tube('name' => name, 'length_mm' => len, 'profile_id' => 5)
+      g.transform!(tr)
+      g
+    end
+
+    def tube_data(g)
+      JSON.parse(g.get_attribute('CS_ACM360_DATA', 'tubes_json')).first
+    end
+
+    def at(x, y, z)
+      Geom::Transformation.translation(Geom::Vector3d.new(x.mm, y.mm, z.mm))
+    end
+
+    def rot(axis, deg)
+      Geom::Transformation.rotation(ORIGIN, axis, deg.degrees)
+    end
+
+    # Tubo vertical (eixo local X -> Z do modelo; ocupa x de tx-20 a tx)
+    def vertical(name, len, tx, ty, tz)
+      place_tube(name, len, at(tx, ty, tz) * rot(Y_AXIS, -90))
+    end
+
+    def run_interference(model)
+      x0 = 30_000
+      targets = {}
+      guard('M5: montar casos') do
+        # L a 90°: ponta B entra 10 mm no vizinho (x 1990..2010)
+        targets[:l90] = place_tube('M5 L90', 2000, at(x0, 0, 0))
+        vertical('M5 obst L90', 1000, x0 + 2010, 0, -500)
+        # Tubo a 30° da horizontal (60° com o vertical) atravessando a face do vizinho
+        targets[:a30] = place_tube('M5 A30', 2000, at(x0, 1000, 0) * rot(Y_AXIS, -30))
+        vertical('M5 obst A30', 3000, x0 + 1730, 1000, -1000)
+        # Vão de 30 mm: estende; vão de 100 mm: fica como está
+        targets[:gap30] = place_tube('M5 vao30', 1000, at(x0, 2000, 0))
+        vertical('M5 obst vao30', 1000, x0 + 1050, 2000, -500)
+        targets[:gap100] = place_tube('M5 vao100', 1000, at(x0, 3000, 0))
+        vertical('M5 obst vao100', 1000, x0 + 1120, 3000, -500)
+        # Girado em planta e em elevação: pediria corte composto
+        targets[:comp] = place_tube('M5 composto', 1420, at(x0, 4000, 0) * rot(Z_AXIS, 30) * rot(Y_AXIS, -20))
+        vertical('M5 obst composto', 3000, x0 + 1150, 4655, -1000)
+        model.selection.clear
+        model.selection.add(targets.values)
+      end
+
+      guard('M5: cortar nas interferências') do
+        msg = P::InterferenceKernel.cut_selection(model)
+        l90, a30 = tube_data(targets[:l90]), tube_data(targets[:a30])
+        g30, g100, comp = tube_data(targets[:gap30]), tube_data(targets[:gap100]), tube_data(targets[:comp])
+        faces = targets[:l90].entities.grep(Sketchup::Group).sum { |g| g.entities.grep(Sketchup::Face).size }
+        check('M5: L a 90° vira encaixe reto', (l90['length_mm'] - 1990).abs < 0.2 && l90['cut_b_deg'].to_f.zero? && faces == 6,
+              { 'tubo' => l90.slice('length_mm', 'cut_a_deg', 'cut_b_deg', 'ends'), 'faces' => faces })
+        # Face do vizinho em x = 1710; a ponta longa (canto de cima, 10 mm atrás) chega em 1720 / cos 30° = 1986,1
+        check('M5: 60° entre tubos vira corte de 30°', (a30['cut_b_deg'].to_f - 30).abs < 0.2 && (a30['length_mm'] - 1986.1).abs < 0.3 &&
+              a30.dig('ends', 'b', 'axis') == 'z',
+              a30.slice('length_mm', 'cut_b_deg', 'ends'))
+        check('M5: vão de 30 mm estende, de 100 mm não', (g30['length_mm'] - 1030).abs < 0.2 && (g100['length_mm'] - 1000).abs < 0.01,
+              { 'vao30' => g30['length_mm'], 'vao100' => g100['length_mm'] })
+        check('M5: corte composto fica como está, com aviso', (comp['length_mm'] - 1420).abs < 0.01 && msg.include?('corte composto'),
+              { 'tubo' => comp['length_mm'], 'msg' => msg })
+        check('M5: nenhuma ponta passa de 75°', targets.values.all? { |g| d = tube_data(g); d['cut_a_deg'].to_f <= 75 && d['cut_b_deg'].to_f <= 75 }, msg)
+      end
+
+      guard('M5: relatório usa o comprimento aparado') do
+        tb = tubes_of(P::UnfoldDxfEngine.build_erp_payload, 'M5 L90').first || {}
+        check('M5: relatório usa o comprimento aparado', (tb['length_mm'].to_f - 1990).abs < 0.2, tb.slice('length_mm', 'cut_b_deg'))
+      end
+    end
+
+    # --------------------------------------------------------------------------
+    # M6: recortes nas bandejas (em x = 40 m)
+    # --------------------------------------------------------------------------
+    def box_group(model, x, y, z, dx, dy, dz)
+      g = model.entities.add_group
+      f = g.entities.add_face([[x, y, z], [x + dx, y, z], [x + dx, y + dy, z], [x, y + dy, z]].map { |p| Geom::Point3d.new(p.map(&:mm)) })
+      f.reverse! if f.normal.z < 0
+      f.pushpull(dz.mm)
+      g
+    end
+
+    def front_loops(tray)
+      front = tray.entities.grep(Sketchup::Group).find { |g| g.name == 'Face Frontal ACM' }
+      front ? front.entities.grep(Sketchup::Face).map { |f| f.loops.size }.max : 0
+    end
+
+    def run_cutouts(model)
+      tc = P::TrayCutouts
+      x0 = 40_000
+      tray = nil
+      base_lines = 0
+      guard('M6: montar bandeja e interferências') do
+        tray = P::AcmTrayKernel.create_or_update_tray('name' => 'Bandeja Recorte', 'code' => 'R01', 'width_mm' => 1000,
+                                                      'height_mm' => 600, 'origin_x_mm' => x0)
+        base_lines = JSON.parse(tray.get_attribute('CS_ACM360_DATA', 'unfold_json'))['cut_lines'].size
+        # Tubo atravessando a face (eixo ao longo de Y): x 460..500, z 300..320
+        place_tube('M6 tubo passante', 300, at(x0 + 500, -100, 300) * rot(Z_AXIS, 90))
+        # Objeto marcado como furo perto da borda esquerda (com dobra): x 10..60, z 100..200
+        furo = box_group(model, x0 + 10, -50, 100, 50, 100, 100)
+        model.selection.clear
+        model.selection.add(furo)
+        tc.mark_holes(model)
+      end
+
+      guard('M6: recortes automáticos') do
+        model.selection.clear
+        model.selection.add(tray)
+        msg = tc.auto_selection(model)
+        cfg = P::HardwareFasteners.tray_cfg(tray)
+        rects = cfg['cutouts'].map { |c| c['pts'] }
+        tube_rect = [[455.0, 295.0], [505.0, 295.0], [505.0, 325.0], [455.0, 325.0]]
+        furo_rect = [[5.0, 95.0], [65.0, 95.0], [65.0, 205.0], [5.0, 205.0]]
+        check('M6: tubo e furo viram recorte com folga de 5 mm', rects.size == 2 && rects.include?(tube_rect) && rects.include?(furo_rect),
+              { 'recortes' => rects, 'msg' => msg })
+        check('M6: recorte perto da dobra gera aviso', msg.include?('Perto da dobra') && msg.include?('5,0 mm da dobra (esq)'), msg)
+        unfold = JSON.parse(tray.get_attribute('CS_ACM360_DATA', 'unfold_json'))
+        k = cfg['bend_factor_mm'].to_f
+        fx0 = cfg.dig('edges', 'esq', 'return_mm').to_f - k
+        fy0 = cfg.dig('edges', 'inf', 'return_mm').to_f - k
+        corner = unfold['cut_lines'].any? { |l| (l['x1'] - (fx0 + 455)).abs < 0.01 && (l['y1'] - (fy0 + 295)).abs < 0.01 }
+        check('M6: recorte na planificação na posição certa', unfold['cut_lines'].size == base_lines + 8 && corner,
+              { 'linhas' => unfold['cut_lines'].size, 'base' => base_lines, 'fx0' => fx0, 'fy0' => fy0 })
+        check('M6: furo aberto na face 3D', front_loops(tray) == 3, front_loops(tray))
+      end
+
+      guard('M6: recorte pelo contorno') do
+        # Círculo de 100 mm desenhado 1 mm à frente da face, centro em x 800, z 400
+        circle = model.entities.add_group
+        edges = circle.entities.add_circle(Geom::Point3d.new((x0 + 800).mm, -1.mm, 400.mm), Y_AXIS, 50.mm, 24)
+        circle.entities.add_face(edges)
+        model.selection.clear
+        model.selection.add([tray, circle])
+        msg = tc.contour_selection(model)
+        cfg = P::HardwareFasteners.tray_cfg(tray)
+        c = cfg['cutouts'].find { |x| x['source'] == 'contorno' }
+        inside = c && c['pts'].all? { |u, v| Math.hypot(u - 800, v - 400).between?(49.0, 50.01) }
+        check('M6: contorno vira recorte com o mesmo desenho', c && c['pts'].size == 24 && inside && front_loops(tray) == 4,
+              { 'msg' => msg, 'pontos' => c && c['pts'].size, 'laços' => front_loops(tray) })
+      end
+
+      guard('M6: vista do verso espelha a chapa') do
+        u = JSON.parse(tray.get_attribute('CS_ACM360_DATA', 'unfold_json'))
+        P::Settings.save(P::Settings.all.merge('flat_view' => 'verso'))
+        v = P::UnfoldDxfEngine.view_unfold(u)
+        P::Settings.reset!
+        same = P::UnfoldDxfEngine.view_unfold(u)['cut_lines'] == u['cut_lines']
+        ok = v['cut_lines'].zip(u['cut_lines']).all? { |a, b| (a['x1'] - (u['width'] - b['x1'])).abs < 0.01 }
+        check('M6: vista do verso espelha a chapa', ok && same && v['cut_lines'] != u['cut_lines'])
+      end
+
+      guard('M6: editar a bandeja mantém os recortes') do
+        cfg = P::HardwareFasteners.tray_cfg(tray)
+        P::AcmTrayKernel.create_or_update_tray(cfg.reject { |k2, _| k2 == 'cutouts' }, tray)
+        n = P::HardwareFasteners.tray_cfg(tray)['cutouts'].size
+        model.selection.clear
+        model.selection.add(tray)
+        tc.clear_selection(model)
+        lines = JSON.parse(tray.get_attribute('CS_ACM360_DATA', 'unfold_json'))['cut_lines'].size
+        check('M6: editar mantém e limpar remove os recortes', n == 3 && lines == base_lines && front_loops(tray) == 1,
+              { 'apos_editar' => n, 'linhas_apos_limpar' => lines })
+      end
     end
 
     # --------------------------------------------------------------------------

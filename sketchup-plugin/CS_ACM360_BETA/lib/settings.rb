@@ -33,7 +33,10 @@ module CS_ACM360_BETA
       'fastener_offset_mm'  => [0.0, 500.0],
       'anchor_spacing_mm'   => [100.0, 3000.0],
       'anchor_margin_mm'    => [0.0, 1000.0],
-      'standoff_mm'         => [10.0, 500.0]
+      'standoff_mm'         => [10.0, 500.0],
+      'interference_max_extend_mm' => [0.0, 500.0],
+      'cutout_clearance_mm' => [0.0, 100.0],
+      'cutout_fold_warn_mm' => [0.0, 200.0]
     }.freeze
 
     FASTENER_RANGES = {
@@ -167,6 +170,7 @@ module CS_ACM360_BETA
       out['color_mode']    = 'tipo'     unless %w[tipo comprimento unica].include?(out['color_mode'])
       out['acm_core']      = 'PE'       unless %w[PE FR].include?(out['acm_core'])
       out['fresa_type']    = 'V90'      unless %w[V90 V135 U].include?(out['fresa_type'])
+      out['flat_view']     = 'frente'   unless %w[frente verso].include?(out['flat_view'])
 
       out['acm_presets'] = normalize_list(out['acm_presets'], defaults['acm_presets']) do |p|
         {

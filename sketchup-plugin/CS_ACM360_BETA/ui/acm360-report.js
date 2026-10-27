@@ -313,7 +313,7 @@
       spec.thickness_mm + ' c' + spec.length_mm;
   }
 
-  // input.trays: [{ w_mm, h_mm, quantity, edges: { inf|sup|esq|dir: { type, return_mm } } }]
+  // input.trays: [{ w_mm, h_mm, thickness_mm, quantity, edges: { inf|sup|esq|dir: { type, return_mm } } }]
   // input.tubes: [{ axis: 'z'|'x', length_mm, d_mm, quantity }]; input.wall: 'ancoragem' | 'espera' | ''
   // Retorna peças por medida e itens de consumo somados, como ReportGenerator.count_fasteners.
   function estimateFasteners(input, settings) {
@@ -326,17 +326,17 @@
     var cant = findSpec(settings, 'cantoneira');
     if (cant) {
       (input.trays || []).forEach(function(t) {
-        var per = 0, edges = t.edges || {};
+        var edges = t.edges || {}, qty = Math.max(num(t.quantity, 1), 1);
         ['inf', 'sup', 'esq', 'dir'].forEach(function(side) {
           var e = edges[side] || {};
           if ((e.type === 'dobra' || e.type === 'dobra_aba') && num(e.return_mm) > cant.thickness_mm) {
             var along = side === 'inf' || side === 'sup' ? t.w_mm : t.h_mm;
-            per += fastenerPositions(along, settings.fastener_spacing_mm, settings.fastener_offset_mm).length;
+            var n = fastenerPositions(along, settings.fastener_spacing_mm, settings.fastener_offset_mm).length * qty;
+            cantoneiras += n;
+            // a aba no retorno não passa da face da bandeja (retorno curto)
+            add(cant, fastenerLabel(cant, Math.min(cant.leg_a_mm, num(e.return_mm) - num(t.thickness_mm))), n);
           }
         });
-        var n = per * Math.max(num(t.quantity, 1), 1);
-        cantoneiras += n;
-        add(cant, fastenerLabel(cant, cant.leg_a_mm), n);
       });
     }
     var wallSpec = input.wall ? findSpec(settings, input.wall) : null;

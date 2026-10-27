@@ -11,6 +11,8 @@ require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'settings')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'frame_kernel')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'acm_tray_kernel')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'hardware_fasteners')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'interference_kernel')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'tray_cutouts')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'report_generator')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'unfold_dxf_engine')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'studio_dialog')
@@ -29,6 +31,9 @@ module CS_ACM360_BETA
     sub_str = ext_menu.add_submenu('Estruturas Metálicas')
     sub_str.add_item('Novo Gradil com Travessas…') { StudioDialog.show('frame') }
     sub_str.add_item('Novo Tubo Avulso…') { StudioDialog.show('tube') }
+    sub_str.add_item('Cortar nas Interferências (Tubos Avulsos Selecionados)') do
+      UI.messagebox(InterferenceKernel.cut_selection)
+    end
     sub_str.add_item('Criar Estrutura das Bandejas ACM (Ler ACM)') do
       AcmTrayKernel.create_frame_from_trays
     end
@@ -48,6 +53,11 @@ module CS_ACM360_BETA
     sub_acm.add_item('Plano de Corte de Chapas & Exportar DXF CNC…') do
       UnfoldDxfEngine.export_model_trays_to_dxf
     end
+    sub_acm.add_separator
+    sub_acm.add_item('Recortes Automáticos (Tubos, Fixadores e Furos)') { UI.messagebox(TrayCutouts.auto_selection) }
+    sub_acm.add_item('Recorte pelo Contorno Selecionado (Letra Caixa…)') { UI.messagebox(TrayCutouts.contour_selection) }
+    sub_acm.add_item('Marcar Seleção como Furo') { UI.messagebox(TrayCutouts.mark_holes) }
+    sub_acm.add_item('Limpar Recortes das Bandejas Selecionadas') { UI.messagebox(TrayCutouts.clear_selection) }
 
     # Submenu Fixadores 3D & Colagem
     sub_fix = ext_menu.add_submenu('Fixadores 3D & Colagem VHB')
@@ -142,8 +152,13 @@ module CS_ACM360_BETA
         sub.add_item('Distribuir Ancoragens (Parede)') { UI.messagebox(HardwareFasteners.distribute_from_selection('ancoragem')) }
         sub.add_item('Distribuir Esperas / Afastadores') { UI.messagebox(HardwareFasteners.distribute_from_selection('espera')) }
         sub.add_item('Remover Fixadores') { UI.messagebox(HardwareFasteners.remove_from_selection) }
+      elsif kind == 'single_tube'
+        sub.add_item('Cortar nas Interferências') { UI.messagebox(InterferenceKernel.cut_selection) }
       elsif kind == 'acm_tray'
         sub.add_item('Planificar Bandeja no 3D') { UnfoldDxfEngine.place_unfolded_tray_in_model(first) }
+        sub.add_item('Recortes Automáticos') { UI.messagebox(TrayCutouts.auto_selection) }
+        sub.add_item('Recorte pelo Contorno Selecionado') { UI.messagebox(TrayCutouts.contour_selection) }
+        sub.add_item('Limpar Recortes') { UI.messagebox(TrayCutouts.clear_selection) }
         sub.add_item('Distribuir Cantoneiras') { UI.messagebox(HardwareFasteners.distribute_from_selection('cantoneira')) }
         sub.add_item('Remover Fixadores') { UI.messagebox(HardwareFasteners.remove_from_selection) }
         sub.add_item('Criar Estrutura Metálica desta(s) Bandeja(s)') { AcmTrayKernel.create_frame_from_trays }

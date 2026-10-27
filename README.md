@@ -12,7 +12,7 @@ Sistema híbrido de engenharia para **Fachadas em ACM e Estruturas Metálicas**,
 acm3d-cs/
 ├── CS_ACM360_v1.0.0.rbz                # Plugin ORIGINAL sem correções (base dos patches — não alterar)
 ├── CS_ACM360_v1.0.2.rbz                # ORIGINAL corrigido para produção (tools/patch_original.py) — instale este
-├── CS_ACM360_BETA_v1.3.0-beta.rbz      # Plugin BETA (em desenvolvimento; instala ao lado do original)
+├── CS_ACM360_BETA_v1.4.0-beta.rbz      # Plugin BETA (em desenvolvimento; instala ao lado do original)
 ├── tools/build_rbz.py                  # Gera o .rbz BETA a partir de sketchup-plugin/
 ├── PLANO_PROJETO.md                    # Plano técnico, arquitetura, fórmulas e roadmap Fase 1
 ├── docs/
@@ -34,6 +34,8 @@ acm3d-cs/
         │   ├── acm_tray_kernel.rb      # Motor 3D de Bandejas ACM, Malha e Leitura ACM → Estrutura
         │   ├── unfold_dxf_engine.rb    # Motor de Planificação 2D/3D, Nesting e Exportador DXF AC1009
         │   ├── hardware_fasteners.rb   # M3/M4: Fita 3M VHB, reforços; cantoneiras, ancoragens e esperas desenhadas pelo plugin
+        │   ├── interference_kernel.rb  # M5: corte nas interferências (apara/estende pontas de tubos avulsos)
+        │   ├── tray_cutouts.rb         # M6: recortes nas bandejas (automático e por contorno)
         │   ├── report_generator.rb     # M8: contagem de fixadores e gravação dos arquivos do relatório
         │   └── studio_dialog.rb        # Ponte Ruby <-> UI::HtmlDialog
         └── ui/
@@ -65,7 +67,7 @@ acm3d-cs/
 
 | | Original (produção) | BETA (desenvolvimento) |
 | :--- | :--- | :--- |
-| Pacote | `CS_ACM360_v1.0.2.rbz` (correções sobre a 1.0.0) | `CS_ACM360_BETA_v1.3.0-beta.rbz` |
+| Pacote | `CS_ACM360_v1.0.2.rbz` (correções sobre a 1.0.0) | `CS_ACM360_BETA_v1.4.0-beta.rbz` |
 | Menu / barra | `CS ACM360` | `CS ACM360 BETA` |
 | Código Ruby | módulo `CS_ACM360` (histórico do git, commit `6081a4d`) | módulo `CS_ACM360_BETA` em `sketchup-plugin/` |
 
@@ -78,7 +80,9 @@ acm3d-cs/
 
 ### Principais comandos do plugin
 - **Estruturas**: Novo Gradil com Travessas, Tubo Avulso, Ler ACM → Estrutura, cores por tipo/comprimento/acabamento.
+- **Cortar nas Interferências** (tubos avulsos selecionados): cada ponta é aparada na face do tubo vizinho que ela atravessa, ou estendida até encostar quando o vão é pequeno (padrão até 50 mm). Corte reto ou inclinado num plano, desenhado de verdade no 3D e levado para a lista de corte; corte composto e ângulo acima de 75° ficam como estão, com aviso.
 - **Bandejas ACM**: Bandeja paramétrica, Fachada em Malha, Planificar no 3D, Plano de Corte e Exportar DXF CNC.
+- **Recortes nas Bandejas**: *Automáticos* (tubos, fixadores e objetos marcados como furo que atravessam a face viram recorte retangular com folga) e *pelo contorno selecionado* (faces ou linhas fechadas desenhadas/importadas sobre a face, como letra caixa). O recorte abre o furo no 3D e vai para a planificação e o DXF (ACM_CORTE); perto da dobra aparece aviso. Em Configurações, *Vista da Chapa no DXF* = verso espelha a chapa para CNC que fresa por trás.
 - **Fixadores & Colagem**: Distribuir Cantoneiras (bandeja → estrutura), Ancoragens (estrutura → parede) ou Esperas/afastadores na seleção (sem seleção, pergunta se aplica no modelo todo), Remover Fixadores, Calcular Fita 3M VHB & Promotor de Adesão. As peças são cantoneiras em L desenhadas pelo plugin com as medidas das Configurações, distribuídas por distância (espaçamento + recuo das pontas), e acompanham a peça quando ela é editada ou regerada. Cada fixador leva o seu consumo (rebites, autobrocantes, buchas, parafusos), somado no relatório já multiplicado pela quantidade da bandeja.
 - **Relatório** (aba 4 do painel): resumo de compra por bitola (metros, barras, aproveitamento, peso e custo), lista de corte consolidada com corte A/B, plano de barras, bandejas, fita VHB e fixadores. Exporta **Excel (XLSX)**, **CSV** e **imprime** com o cabeçalho da empresa. Lê o modelo inteiro, inclusive peças dentro de grupos.
 - **Publicar**: exporta o pacote `.json` para o CS Fachadas ERP.
@@ -123,9 +127,11 @@ Na barra superior do sistema, clique na aba **`ACM360 Studio`** para acessar:
 | Fase 1 — MVP (gradil, tubos, bandejas, Ler ACM, planificação, DXF, OS no ERP) | ✅ Concluído |
 | M3 — Colagem (fita 3M VHB e reforços) | 🟡 Parcial (cálculo de metros/rolos; desenho da fita e tiras pendentes) |
 | M4 — Fixadores avançados | ✅ BETA 1.3.0 (cantoneira, ancoragem e espera desenhadas pelo plugin, por distância, com consumo no relatório; falta a colocação por clique, que depende do M1) |
+| M5 — Corte nas interferências | ✅ BETA 1.4.0 (tubos avulsos; corte composto adiado) |
+| M6 — Recortes nas bandejas ACM | ✅ BETA 1.4.0 (automático e por contorno; retângulo/círculo digitado não foi pedido) |
 | M8 — Relatório, lista de corte e exportação | ✅ Concluído no BETA (filtros por seleção e colunas configuráveis adiados) |
 | M12 — Configurações | ✅ Concluído no BETA (idiomas e verificação de atualização adiados) |
-| M1, M2, M5, M6, M7, M9, M10, M11 | ⬜ Planejado |
+| M1, M2, M7, M9, M10, M11 | ⬜ Planejado |
 
 Detalhes e critérios de aceite em [docs/PLANO_MODULOS.md](docs/PLANO_MODULOS.md).
 

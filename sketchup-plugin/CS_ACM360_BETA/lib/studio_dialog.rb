@@ -88,6 +88,26 @@ module CS_ACM360_BETA
         UnfoldDxfEngine.export_erp_json_dialog
       end
 
+      # --- M5/M6: corte nas interferências e recortes nas bandejas ---
+      {
+        'cut_interferences'   => -> { InterferenceKernel.cut_selection },
+        'tray_cutouts_auto'   => -> { TrayCutouts.auto_selection },
+        'tray_cutouts_contour'=> -> { TrayCutouts.contour_selection },
+        'mark_as_hole'        => -> { TrayCutouts.mark_holes },
+        'clear_tray_cutouts'  => -> { TrayCutouts.clear_selection }
+      }.each do |name, action|
+        dlg.add_action_callback(name) do |_ctx|
+          begin
+            msg = action.call
+            push_state_to_ui
+            dlg.execute_script("window.CSStudio && window.CSStudio.setStatus(#{JSON.generate(msg.lines.first.to_s.strip)});")
+            UI.messagebox(msg)
+          rescue StandardError => e
+            UI.messagebox("Erro: #{e.class}: #{e.message}")
+          end
+        end
+      end
+
       # --- M4: Fixadores ---
       dlg.add_action_callback('distribute_fasteners') do |_ctx, type|
         begin

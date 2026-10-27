@@ -248,6 +248,13 @@ flowchart TD
 - Dois tubos cruzando em "L" a 90° viram encaixe reto; a 60° viram cortes de 30° nas pontas.
 - Nenhuma ponta passa de 75°.
 
+**Status (27/10/2026): entregue no BETA 1.4.0** (decisão da CS: só tubos avulsos; aparar e estender)
+- `lib/interference_kernel.rb`. Para cada tubo avulso selecionado (inclusive dentro de grupos), procura o tubo vizinho (avulso ou de estrutura) que a ponta atravessa, ou que começa a até `interference_max_extend_mm` (50 mm) dela, e corta na face de entrada desse vizinho. Tubo que só cruza outro (passa de lado a lado) não é cortado.
+- A ponta guarda o plano do corte (`ends`: direção da inclinação, tangente e lado da ponta longa); o tubo é redesenhado como sólido de 6 faces e o comprimento/ângulo vão para `tubes_json` (lista de corte, perda angular, ERP).
+- Pula, com contagem na mensagem: corte composto (inclinação nas duas direções), ângulo acima de 75°, ponta que deixaria o tubo curto demais e tubo escalado à mão.
+- Estruturas paramétricas não são alteradas (continuam calculando os cantos).
+- Testes no SketchUp: L a 90° vira encaixe reto, 60° entre tubos vira corte de 30°, vão de 30 mm estende e de 100 mm não, corte composto é pulado, relatório usa o comprimento aparado.
+
 ---
 
 ## M6 — Recortes nas bandejas ACM
@@ -263,6 +270,14 @@ flowchart TD
 **Critérios de aceite**
 - Um furo de 100 mm na face aparece no DXF na posição certa, com a folga aplicada.
 - Recorte perto da dobra gera aviso.
+
+**Status (27/10/2026): entregue no BETA 1.4.0** (decisão da CS: automático por interferência e contorno desenhado/importado)
+- `lib/tray_cutouts.rb`. Recortes guardados no `tray_json` da bandeja (vista de frente, mm a partir do canto inferior esquerdo da face); editar a bandeja pelo painel mantém os recortes.
+- **Automático**: seção de tubos, fixadores de estruturas e objetos marcados como furo (menu *Marcar Seleção como Furo*) na espessura da face, com folga `cutout_clearance_mm` por lado; recortes sobrepostos viram um só. Refazer substitui os automáticos e mantém os de contorno.
+- **Contorno**: faces (com os furos internos) ou linhas fechadas da seleção, inclusive dentro de grupos/DWG importado, a até 200 mm da face e cabendo inteiras nela.
+- 3D: furo aberto na face antes da espessura. Planificação/DXF: contorno na camada ACM_CORTE. Aviso quando o recorte fica a menos de `cutout_fold_warn_mm` (20 mm) de uma borda com dobra, na mensagem e na exportação do DXF.
+- `flat_view` = `verso` espelha a chapa no DXF e na planificação 3D (CNC que fresa pelo lado de trás); padrão `frente`, igual às versões anteriores.
+- Testes no SketchUp: tubo e furo viram recorte na posição certa com folga, aviso perto da dobra, furo na face 3D, contorno de círculo vira recorte de 24 pontos, editar mantém e limpar remove, verso espelha.
 
 ---
 

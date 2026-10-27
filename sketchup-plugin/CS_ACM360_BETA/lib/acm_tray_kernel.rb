@@ -32,22 +32,15 @@ module CS_ACM360_BETA
       begin
         if existing_group && existing_group.valid?
           grp = existing_group
-          grp.entities.clear!
+          # Editar pelo painel não apaga os recortes já feitos (M6)
+          unless params.key?('cutouts')
+            old = JSON.parse(grp.get_attribute(Catalog::ATTR_DICT, 'tray_json').to_s) rescue {}
+            cfg['cutouts'] = normalize_cutouts(old['cutouts'], cfg) if old.is_a?(Hash)
+          end
         else
           grp = model.active_entities.add_group
         end
-
-        grp.name = cfg['name']
-        FrameKernel.ensure_layer(model, 'CS_ACM360_Bandejas_ACM', grp)
-
-        draw_tray_3d(model, grp.entities, cfg)
-        flat_data = UnfoldDxfEngine.compute_tray_unfold(cfg)
-
-        grp.set_attribute(Catalog::ATTR_DICT, 'kind', 'acm_tray')
-        grp.set_attribute(Catalog::ATTR_DICT, 'version', CS_ACM360_BETA::PLUGIN_VERSION)
-        grp.set_attribute(Catalog::ATTR_DICT, 'tray_json', JSON.generate(cfg))
-        grp.set_attribute(Catalog::ATTR_DICT, 'unfold_json', JSON.generate(flat_data))
-        HardwareFasteners.reapply(grp)
+        build_tray(model, grp, cfg)
 
         model.commit_operation
         model.selection.clear
@@ -57,6 +50,36 @@ module CS_ACM360_BETA
         model.abort_operation
         UI.messagebox("Erro ao gerar Bandeja ACM: #{e.message}")
         nil
+      end
+    end
+
+    # Redesenha a bandeja no grupo e grava os atributos (dentro de uma operação já aberta)
+    def self.build_tray(model, grp, cfg)
+      grp.entities.clear!
+      grp.name = cfg['name']
+      FrameKernel.ensure_layer(model, 'CS_ACM360_Bandejas_ACM', grp)
+
+      draw_tray_3d(model, grp.entities, cfg)
+      flat_data = UnfoldDxfEngine.compute_tray_unfold(cfg)
+
+      grp.set_attribute(Catalog::ATTR_DICT, 'kind', 'acm_tray')
+      grp.set_attribute(Catalog::ATTR_DICT, 'version', CS_ACM360_BETA::PLUGIN_VERSION)
+      grp.set_attribute(Catalog::ATTR_DICT, 'tray_json', JSON.generate(cfg))
+      grp.set_attribute(Catalog::ATTR_DICT, 'unfold_json', JSON.generate(flat_data))
+      HardwareFasteners.reapply(grp)
+      flat_data
+    end
+
+    # Recortes na face (M6): contornos em mm a partir do canto inferior esquerdo da face,
+    # vista de frente. Só ficam os que cabem inteiros na face.
+    def self.normalize_cutouts(list, cfg)
+      w, h = cfg['width_mm'].to_f, cfg['height_mm'].to_f
+      Array(list).filter_map do |c|
+        next unless c.is_a?(Hash)
+        pts = Array(c['pts']).filter_map { |p| [p[0].to_f.round(2), p[1].to_f.round(2)] if p.is_a?(Array) && p.size >= 2 }
+        next if pts.size < 3
+        next unless pts.all? { |u, v| u > 0 && u < w && v > 0 && v < h }
+        { 'source' => c['source'] == 'contorno' ? 'contorno' : 'auto', 'pts' => pts }
       end
     end
 
@@ -253,7 +276,7 @@ module CS_ACM360_BETA
         }
       end
 
-      {
+      cfg = {
         'id'             => (raw['id'] || "TRAY_#{Time.now.to_i}_#{rand(100..999)}").to_s,
         'code'           => (raw['code'] || 'P01').to_s,
         'name'           => (raw['name'] || 'Bandeja ACM 01').to_s,
@@ -272,6 +295,7 @@ module CS_ACM360_BETA
         'color_hex'      => (raw['color_hex'] || '#27272A').to_s,
         'dupla_face'     => raw['dupla_face'] != false,
         'tiras_reforco'  => !!raw['tiras_reforco'],
+        'cutouts'        => [],
         'edges'          => {
           'sup' => norm_edge.call('sup'),
           'inf' => norm_edge.call('inf'),
@@ -279,6 +303,8 @@ module CS_ACM360_BETA
           'dir' => norm_edge.call('dir')
         }
       }
+      cfg['cutouts'] = normalize_cutouts(raw['cutouts'], cfg)
+      cfg
     end
 
     # Desenha a bandeja de ACM dobrada em 3D no SketchUp (face frontal + retornos + abas)
@@ -303,6 +329,12 @@ module CS_ACM360_BETA
       ]
       f_face = front_grp.entities.add_face(pts_f)
       if f_face
+        # Recortes (M6): abre o furo na face antes de dar espessura
+        Array(cfg['cutouts']).each do |c|
+          hole = front_grp.entities.add_face(c['pts'].map { |u, v| Geom::Point3d.new(ox + mm(u), oy, oz + mm(v)) }) rescue nil
+          hole.erase! if hole && hole.valid? && hole != f_face
+        end
+        f_face = front_grp.entities.grep(Sketchup::Face).max_by(&:area) unless f_face.valid?
         f_face.reverse! if f_face.normal.y < 0
         f_face.pushpull(th)
       end

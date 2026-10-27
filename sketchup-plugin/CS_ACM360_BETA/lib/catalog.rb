@@ -88,6 +88,13 @@ module CS_ACM360_BETA
         { 'id' => 'generico_3', 'name' => 'Genérico 3 mm', 'thickness_mm' => 3.0, 'bend_factor_mm' => 1.5 },
         { 'id' => 'generico_4', 'name' => 'Genérico 4 mm', 'thickness_mm' => 4.0, 'bend_factor_mm' => 2.0 }
       ],
+      # M5: tubo avulso estende até encostar no vizinho se o vão for até este valor
+      'interference_max_extend_mm' => 50.0,
+      # M6: folga por lado dos recortes automáticos e distância mínima até a dobra (aviso)
+      'cutout_clearance_mm' => 5.0,
+      'cutout_fold_warn_mm' => 20.0,
+      # Lado da chapa visto no DXF: frente (padrão) ou verso (espelhado, CNC fresando por trás)
+      'flat_view'           => 'frente',
       # Fixadores (M4): cantoneira bandeja → estrutura usa spacing/offset; ancoragem e espera
       # (estrutura → parede) usam anchor_*; standoff_mm é o afastamento da espera até a parede
       'fastener_spacing_mm' => 400.0,

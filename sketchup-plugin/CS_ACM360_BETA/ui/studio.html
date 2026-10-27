@@ -287,6 +287,52 @@
         </div>
       </div>
 
+      <div class="card" id="cardTube">
+        <h3>Tubo Avulso & Corte nas Interferências</h3>
+        <div class="grid-4">
+          <div class="field">
+            <label for="uName">Nome</label>
+            <input type="text" id="uName" value="Tubo Avulso">
+          </div>
+          <div class="field">
+            <label for="uProfile">Bitola</label>
+            <select id="uProfile"></select>
+          </div>
+          <div class="field">
+            <label for="uRot">Orientação</label>
+            <select id="uRot">
+              <option value="1">Menor para frente</option>
+              <option value="2">Maior para frente</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="uLength">Comprimento (mm)</label>
+            <input type="number" id="uLength" value="2000" min="10" step="10">
+          </div>
+          <div class="field">
+            <label for="uCutA">Corte Ponta A (°)</label>
+            <input type="number" id="uCutA" value="0" min="0" max="75" step="1">
+          </div>
+          <div class="field">
+            <label for="uCutB">Corte Ponta B (°)</label>
+            <input type="number" id="uCutB" value="0" min="0" max="75" step="1">
+          </div>
+          <div class="field">
+            <label for="uMaterial">Material</label>
+            <select id="uMaterial">
+              <option value="aco_carbono">Aço Carbono</option>
+              <option value="galvanizado">Galvanizado</option>
+              <option value="aluminio">Alumínio</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button type="button" class="btn primary" onclick="CSStudio.submitTube()">Criar Tubo Avulso</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('cut_interferences')">Cortar nas Interferências (Seleção)</button>
+        </div>
+        <p class="hint">Mova e gire o tubo com as ferramentas do SketchUp até a posição; depois selecione e use Cortar nas Interferências: cada ponta é aparada na face do tubo vizinho (ou estendida até encostar, se o vão for pequeno). Corte composto e ângulo acima de 75° ficam como estão, com aviso.</p>
+      </div>
+
       <div class="card">
         <h3>Fixadores & Leitura Automática de Bandejas ACM</h3>
         <div class="btn-row">
@@ -356,6 +402,17 @@
           <button type="button" class="btn" onclick="CSStudio.callRuby('unfold_selected_3d')">Planificar Bandeja Selecionada no 3D</button>
           <button type="button" class="btn" onclick="CSStudio.callRuby('export_dxf')">Exportar DXF CNC (AC1009)</button>
         </div>
+      </div>
+
+      <div class="card">
+        <h3>Recortes nas Bandejas ACM</h3>
+        <div class="btn-row">
+          <button type="button" class="btn" onclick="CSStudio.callRuby('tray_cutouts_auto')">Recortes Automáticos</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('tray_cutouts_contour')">Recorte pelo Contorno Selecionado</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('mark_as_hole')">Marcar Seleção como Furo</button>
+          <button type="button" class="btn danger" onclick="CSStudio.callRuby('clear_tray_cutouts')">Limpar Recortes</button>
+        </div>
+        <p class="hint"><strong>Automático:</strong> tubos, fixadores das estruturas e objetos marcados como furo que atravessam a face viram recorte retangular com a folga das Configurações. <strong>Contorno:</strong> desenhe ou importe o contorno (ex.: letra caixa) sobre a face, selecione a bandeja e o contorno e aplique; o recorte segue o desenho. Os recortes vão para o 3D, a planificação e o DXF (camada ACM_CORTE); perto da dobra aparece um aviso.</p>
       </div>
     </section>
 
@@ -486,7 +543,13 @@
             </select>
           </div>
         </div>
-        <p class="hint">Ao mudar a barra ou a serra, as estruturas do modelo são regeradas (emendas e plano de barras).</p>
+        <div class="grid-4" style="margin-top:10px;">
+          <div class="field">
+            <label for="sMaxExtend">Corte nas Interferências · Estender até (mm)</label>
+            <input type="number" id="sMaxExtend" data-setting="interference_max_extend_mm" min="0" max="500" step="5">
+          </div>
+        </div>
+        <p class="hint">Ao mudar a barra ou a serra, as estruturas do modelo são regeradas (emendas e plano de barras). Tubo avulso com vão até o vizinho menor que "Estender até" é estendido para encostar (0 = só aparar).</p>
       </div>
 
       <div class="card">
@@ -513,6 +576,23 @@
               <option value="V90">V 90°</option>
               <option value="V135">V 135°</option>
               <option value="U">Meia-cana (U)</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-4" style="margin-top:10px;">
+          <div class="field">
+            <label for="sCutClear">Recortes · Folga por Lado (mm)</label>
+            <input type="number" id="sCutClear" data-setting="cutout_clearance_mm" min="0" max="100" step="1">
+          </div>
+          <div class="field">
+            <label for="sCutWarn">Recortes · Aviso Perto da Dobra (mm)</label>
+            <input type="number" id="sCutWarn" data-setting="cutout_fold_warn_mm" min="0" max="200" step="1">
+          </div>
+          <div class="field">
+            <label for="sFlatView">Vista da Chapa no DXF</label>
+            <select id="sFlatView" data-setting="flat_view">
+              <option value="frente">Frente (como se vê na fachada)</option>
+              <option value="verso">Verso (espelhado, CNC fresa por trás)</option>
             </select>
           </div>
         </div>
@@ -680,6 +760,8 @@
         alert(msg);
       },
       switchTab: function(tabId) {
+        var focusTube = tabId === 'tube'; // "Novo Tubo Avulso" fica na aba 1
+        if (focusTube) tabId = 'frame';
         var btns = document.querySelectorAll('.tab-btn');
         for (var i = 0; i < btns.length; i++) {
           btns[i].classList.toggle('active', btns[i].getAttribute('data-tab') === tabId);
@@ -688,6 +770,7 @@
         for (var j = 0; j < panels.length; j++) {
           panels[j].classList.toggle('active', panels[j].id === 'panel-' + tabId);
         }
+        if (focusTube) document.getElementById('cardTube').scrollIntoView();
       },
       settingsDraft: null,
       settingsDirty: false,
@@ -698,6 +781,7 @@
         var st = data.settings || {};
         this.fillProfileSelect('fProfileCorda', data.profiles || [], 5);
         this.fillProfileSelect('fProfileTrav', data.profiles || [], 3);
+        this.fillProfileSelect('uProfile', data.profiles || [], 5);
         this.fillOptions('tPreset', st.acm_presets || [], document.getElementById('tPreset').value || st.acm_preset);
         document.getElementById('fBarInfo').value = (st.bar_mm || 6000) + ' mm';
         if (!this.trayDefaultsApplied && st.bar_mm) {
@@ -923,6 +1007,18 @@
           update_selected: !!updateSel
         };
         this.callRuby('create_or_update_frame', JSON.stringify(payload));
+      },
+      submitTube: function() {
+        var payload = {
+          name: document.getElementById('uName').value,
+          profile_id: Number(document.getElementById('uProfile').value || 5),
+          rot: Number(document.getElementById('uRot').value || 1),
+          length_mm: Number(document.getElementById('uLength').value),
+          cut_a_deg: Number(document.getElementById('uCutA').value) || 0,
+          cut_b_deg: Number(document.getElementById('uCutB').value) || 0,
+          material: document.getElementById('uMaterial').value
+        };
+        this.callRuby('create_single_tube', JSON.stringify(payload));
       },
       submitTray: function() {
         var payload = {

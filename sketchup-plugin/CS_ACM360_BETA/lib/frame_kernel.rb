@@ -481,6 +481,12 @@ module CS_ACM360_BETA
       d  = mm(tube[:d_mm])
       h  = mm(tube[:h_mm])
 
+      # Tubo avulso aparado nas interferências (M5): cada ponta num plano próprio
+      if tube[:ends].is_a?(Hash)
+        draw_cut_prism(grp.entities, InterferenceKernel.tube_corners(tube.transform_keys(&:to_s)))
+        return finish_tube_group(model, grp, tube, color_mode)
+      end
+
       pts_front = nil
       if tube[:cut_a_deg].to_f == 45.0 && tube[:cut_b_deg].to_f == 45.0 && tube[:group_role] == 'quadro'
         # Meia-esquadria 45° no plano frontal X-Z (fiel ao bloco A003)
@@ -558,6 +564,10 @@ module CS_ACM360_BETA
         end
       end
 
+      finish_tube_group(model, grp, tube, color_mode)
+    end
+
+    def self.finish_tube_group(model, grp, tube, color_mode)
       hex = resolve_tube_color(tube, color_mode)
       grp.material = ensure_material(model, "CS_ACM360_#{hex}", hex)
       grp.set_attribute(Catalog::ATTR_DICT, 'piece_id', tube[:id])
@@ -565,6 +575,17 @@ module CS_ACM360_BETA
       grp.set_attribute(Catalog::ATTR_DICT, 'length_mm', tube[:length_mm])
       grp.set_attribute(Catalog::ATTR_DICT, 'profile_name', tube[:profile_name])
       grp
+    end
+
+    # Sólido de 6 faces a partir dos cantos das duas pontas (mm), faces voltadas para fora
+    def self.draw_cut_prism(entities, corners)
+      a = corners[:a].map { |p| Geom::Point3d.new(p.map { |v| mm(v) }) }
+      b = corners[:b].map { |p| Geom::Point3d.new(p.map { |v| mm(v) }) }
+      center = Geom::Point3d.new(*(a + b).map(&:to_a).transpose.map { |c| c.sum / 8.0 })
+      [a, b, [a[0], a[1], b[1], b[0]], [a[1], a[2], b[2], b[1]], [a[2], a[3], b[3], b[2]], [a[3], a[0], b[0], b[3]]].each do |q|
+        face = entities.add_face(q)
+        face.reverse! if face && face.normal.dot(center - face.vertices.first.position) > 0
+      end
     end
 
     def self.resolve_tube_color(tube, color_mode)

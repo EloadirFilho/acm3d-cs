@@ -2202,10 +2202,10 @@ function computeAcmStudioModel(cfg) {
   const edge = { type: cfg.edgeType, return_mm: cfg.returnMm };
   const fastenerSettings = { ...acmSettings, fastener_spacing_mm: cfg.fastenerSpacing };
   const trayFix = AcmReport.estimateFasteners({
-    trays: [{ w_mm: trayW, h_mm: trayH, quantity: 1, edges: { inf: edge, sup: edge, esq: edge, dir: edge } }]
+    trays: [{ w_mm: trayW, h_mm: trayH, thickness_mm: preset.thickness_mm, quantity: 1, edges: { inf: edge, sup: edge, esq: edge, dir: edge } }]
   }, fastenerSettings);
   const fasteners = AcmReport.estimateFasteners({
-    trays: [{ w_mm: trayW, h_mm: trayH, quantity: totalTrays, edges: { inf: edge, sup: edge, esq: edge, dir: edge } }],
+    trays: [{ w_mm: trayW, h_mm: trayH, thickness_mm: preset.thickness_mm, quantity: totalTrays, edges: { inf: edge, sup: edge, esq: edge, dir: edge } }],
     tubes: tubes.map((tb) => ({ axis: tb.axis, length_mm: tb.len, d_mm: tb.profile === profF ? fd : td })),
     wall: cfg.wallFastener
   }, fastenerSettings);

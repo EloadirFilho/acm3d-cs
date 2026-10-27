@@ -160,6 +160,23 @@ module CS_ACM360_BETA
         add_line.call(cut_lines, pt[0], pt[1], nxt[0], nxt[1])
       end
 
+      # Recortes na face (M6): contorno fechado na camada de corte; aviso perto de dobra
+      warnings = []
+      warn_mm = (Settings.get('cutout_fold_warn_mm') || 0).to_f
+      Array(cfg['cutouts']).each_with_index do |c, ci|
+        pts = c['pts']
+        pts.each_with_index do |(u, v), i|
+          nu, nv = pts[(i + 1) % pts.size]
+          add_line.call(cut_lines, fx0 + u, fy0 + v, fx0 + nu, fy0 + nv)
+        end
+        us, vs = pts.map(&:first), pts.map(&:last)
+        gaps = { 'esq' => us.min, 'dir' => w - us.max, 'inf' => vs.min, 'sup' => h - vs.max }
+        gaps.each do |side, gap|
+          next unless %w[dobra dobra_aba].include?((edges[side] || {})['type'].to_s) && gap < warn_mm
+          warnings << "Recorte #{ci + 1} a #{gap.round(1).to_s.tr('.', ',')} mm da dobra (#{side})"
+        end
+      end
+
       area_m2 = ((flat_w * flat_h) / 1_000_000.0).round(3)
 
       {
@@ -173,8 +190,19 @@ module CS_ACM360_BETA
         'front_h_mm' => h,
         'area_m2'    => area_m2,
         'cut_lines'  => cut_lines,
-        'fold_lines' => fold_lines
+        'fold_lines' => fold_lines,
+        'cutouts'    => Array(cfg['cutouts']).size,
+        'warnings'   => warnings
       }
+    end
+
+    # A planificação é guardada vista de frente. Com "Vista da chapa: verso" nas
+    # Configurações (CNC fresando pelo lado de trás), sai espelhada no DXF e no 3D.
+    def self.view_unfold(unfold)
+      return unfold unless Settings.get('flat_view') == 'verso'
+      w = unfold['width'].to_f
+      flip = ->(lines) { Array(lines).map { |l| l.merge('x1' => (w - l['x1'].to_f).round(2), 'x2' => (w - l['x2'].to_f).round(2)) } }
+      unfold.merge('cut_lines' => flip.call(unfold['cut_lines']), 'fold_lines' => flip.call(unfold['fold_lines']))
     end
 
     # Gera a geometria 2D planificada diretamente no modelo 3D do SketchUp (ao lado da peça)
@@ -190,7 +218,7 @@ module CS_ACM360_BETA
 
       raw_unfold = grp.get_attribute(Catalog::ATTR_DICT, 'unfold_json')
       return nil unless raw_unfold
-      unfold = JSON.parse(raw_unfold)
+      unfold = view_unfold(JSON.parse(raw_unfold))
 
       model.start_operation('Planificar Bandeja ACM no 3D (CS ACM360)', true)
       begin
@@ -451,9 +479,12 @@ module CS_ACM360_BETA
         p
       end
       pieces = sheets.sum { |sh| sh[:placements].size }
+      warns = trays.flat_map { |t| Array(t['warnings']).map { |w| "#{t['code']}: #{w}" } }
+      view = Settings.get('flat_view') == 'verso' ? 'verso (espelhado)' : 'frente'
       UI.messagebox("Arquivo DXF exportado com sucesso!\n\n#{pieces} peça(s) em #{sheets.size} chapa(s) de " \
-                    "#{nesting['sheet_w_mm'].round}×#{nesting['sheet_h_mm'].round} mm\n" \
-                    "Camadas geradas: ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_DIRECAO, ACM_ETIQUETAS\n\n#{paths.join("\n")}")
+                    "#{nesting['sheet_w_mm'].round}×#{nesting['sheet_h_mm'].round} mm · vista da chapa: #{view}\n" \
+                    "Camadas geradas: ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_DIRECAO, ACM_ETIQUETAS\n\n#{paths.join("\n")}" +
+                    (warns.empty? ? '' : "\n\n⚠ Confira:\n#{warns.join("\n")}"))
     end
 
     # Nesting com chapa, espaçamento e margem das Configurações (M12)
@@ -469,7 +500,7 @@ module CS_ACM360_BETA
         raw = grp.get_attribute(Catalog::ATTR_DICT, 'unfold_json')
         next unless raw
         parsed = JSON.parse(raw) rescue nil
-        trays << parsed if parsed
+        trays << view_unfold(parsed) if parsed
       end
       trays
     end

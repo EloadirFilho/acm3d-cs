@@ -214,7 +214,6 @@ module CS_ACM360_BETA
       ox, oy, oz = cfg['origin_x_mm'].to_f, cfg['origin_y_mm'].to_f, cfg['origin_z_mm'].to_f
       w, h, th = cfg['width_mm'].to_f, cfg['height_mm'].to_f, cfg['thickness_mm'].to_f
       edges = cfg['edges'] || {}
-      defn = angle_definition('cantoneira', spec['leg_a_mm'])
       arr = new_array(tray, 'cantoneira')
       back = Geom::Vector3d.new(0, -1, 0)
       n = 0
@@ -222,6 +221,8 @@ module CS_ACM360_BETA
         e = edges[side] || {}
         next unless %w[dobra dobra_aba].include?(e['type'].to_s) && e['return_mm'].to_f > spec['thickness_mm']
         y_back = oy + e['return_mm'].to_f
+        # A aba no retorno não passa da face da bandeja (retorno curto)
+        defn = angle_definition('cantoneira', [spec['leg_a_mm'], e['return_mm'].to_f - th].min)
         along, inward, corner = case side
                                 when 'inf' then [w, [0, 0, 1],  ->(p) { [ox + p, y_back, oz + th] }]
                                 when 'sup' then [w, [0, 0, -1], ->(p) { [ox + p, y_back, oz + h - th] }]
