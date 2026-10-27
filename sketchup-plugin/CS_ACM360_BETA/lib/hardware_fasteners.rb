@@ -24,27 +24,29 @@ module CS_ACM360_BETA
       total_stiffener_mm = 0.0
       tray_count = trays.size
 
+      # Mesma regra de ui/acm360-report.js (relatório M8)
       trays.each do |t|
-        w = t.get_attribute(Catalog::ATTR_DICT, 'width', 1000.0).to_f
-        h = t.get_attribute(Catalog::ATTR_DICT, 'height', 600.0).to_f
-        
+        cfg = tray_cfg(t)
+        w = cfg['width_mm'].to_f
+        h = cfg['height_mm'].to_f
+        qty = [cfg['quantity'].to_i, 1].max
+
         # Perímetro de colagem das abas/retornos (4 lados)
-        perimeter = 2.0 * (w + h)
-        total_perimeter_mm += perimeter
+        total_perimeter_mm += 2.0 * (w + h) * qty
 
         # Reforços intermediários colados no verso do ACM (a cada ~400mm de vão)
         if h > 450.0
           vertical_stiffeners = [(w / 400.0).floor - 1, 0].max
-          total_stiffener_mm += vertical_stiffeners * (h - 100.0)
+          total_stiffener_mm += vertical_stiffeners * (h - 100.0) * qty
         end
       end
 
       total_tape_m = (total_perimeter_mm + total_stiffener_mm) / 1000.0
       tape = Settings.tape
       rolls_needed = (total_tape_m / tape['roll_m'].to_f).ceil
-      
+
       # Primer 3M AP111 / 94 (aprox. 1 frasco de 250ml para cada 100 metros lineares)
-      primer_cans = [(total_tape_m / 100.0).ceil, 1].max
+      primer_cans = total_tape_m > 0 ? [(total_tape_m / 100.0).ceil, 1].max : 0
 
       {
         tray_count: tray_count,
@@ -69,9 +71,9 @@ module CS_ACM360_BETA
       offset  = (opts[:offset]  || Settings.get('fastener_offset_mm')).to_f.mm
       fastener_type = opts[:fastener_type] || 'F003' # Cantoneira_Fixador_F003
 
-      w = tray_group.get_attribute(Catalog::ATTR_DICT, 'width', 1000.0).to_f.mm
-      h = tray_group.get_attribute(Catalog::ATTR_DICT, 'height', 600.0).to_f.mm
-      fold = tray_group.get_attribute(Catalog::ATTR_DICT, 'fold_depth', 25.0).to_f.mm
+      cfg = tray_cfg(tray_group)
+      w = cfg['width_mm'].to_f.mm
+      h = cfg['height_mm'].to_f.mm
 
       skp_path = File.join(CS_ACM360_BETA::PLUGIN_DIR, 'BLOCOS', "#{fastener_type_filename(fastener_type)}.skp")
       unless File.exist?(skp_path)
@@ -137,13 +139,15 @@ module CS_ACM360_BETA
       end
     end
 
+    # Parâmetros gravados pela AcmTrayKernel no atributo tray_json
+    def tray_cfg(tray_group)
+      cfg = JSON.parse(tray_group.get_attribute(Catalog::ATTR_DICT, 'tray_json').to_s) rescue {}
+      cfg.is_a?(Hash) ? cfg : {}
+    end
+
     def find_all_acm_trays(model)
       trays = []
-      model.entities.each do |e|
-        next unless e.is_a?(Sketchup::Group)
-        kind = e.get_attribute(Catalog::ATTR_DICT, 'kind')
-        trays << e if kind == 'acm_tray'
-      end
+      UnfoldDxfEngine.each_cs_group(model.entities) { |g, kind| trays << g if kind == 'acm_tray' }
       trays
     end
 

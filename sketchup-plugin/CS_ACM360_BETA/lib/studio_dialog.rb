@@ -101,6 +101,27 @@ module CS_ACM360_BETA
         push_state_to_ui
       end
 
+      # --- M8: Relatório (arquivos gerados em ui/acm360-report.js) ---
+      dlg.add_action_callback('save_report_file') do |_ctx, json_str|
+        begin
+          payload = JSON.parse(json_str.to_s)
+          path = ReportGenerator.save_file(payload)
+          msg = path ? "Relatório salvo em #{path}" : 'Exportação cancelada'
+          dlg.execute_script("window.CSStudio && window.CSStudio.setStatus(#{JSON.generate(msg)});")
+          UI.messagebox("Relatório salvo em:\n#{path}") if path
+        rescue StandardError => e
+          UI.messagebox("Erro ao exportar o relatório: #{e.class}: #{e.message}")
+        end
+      end
+
+      dlg.add_action_callback('print_report') do |_ctx, html|
+        begin
+          ReportGenerator.open_print_view(html)
+        rescue StandardError => e
+          UI.messagebox("Erro ao abrir o relatório para impressão: #{e.class}: #{e.message}")
+        end
+      end
+
       # --- M12: Configurações ---
       dlg.add_action_callback('save_settings') do |_ctx, json_str|
         raw = JSON.parse(json_str.to_s) rescue nil
@@ -148,7 +169,9 @@ module CS_ACM360_BETA
       return unless @dialog && @dialog.visible?
       payload = UnfoldDxfEngine.build_erp_payload
       payload['profiles'] = Settings.profiles
+      payload['plugin_version'] = CS_ACM360_BETA::PLUGIN_VERSION
       payload['settings'] = Settings.all
+      payload['fasteners'] = ReportGenerator.count_fasteners
       payload['initial_tab'] = tab if tab
       json_str = JSON.generate(payload)
       @dialog.execute_script("window.CSStudio && window.CSStudio.loadModelState(#{json_str});")

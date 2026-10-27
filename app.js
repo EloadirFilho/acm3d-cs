@@ -2186,7 +2186,9 @@ function computeAcmStudioModel(cfg) {
 
   // Cálculo de Ferragens, Colagem VHB e Fixadores (Módulos M3, M4 e M8)
   const trayPerimM = (2 * (trayW + trayH)) / 1000;
-  const singleTrayTapeM = trayPerimM;
+  // Mesma regra do relatório (acm360-report.js): reforços a cada ~400 mm quando a bandeja passa de 450 mm
+  const stiffenerM = trayH > 450 ? (Math.max(Math.floor(trayW / 400) - 1, 0) * (trayH - 100)) / 1000 : 0;
+  const singleTrayTapeM = trayPerimM + stiffenerM;
   const totalTapeM = Math.round(singleTrayTapeM * totalTrays * 10) / 10;
   const vhbRolls = Math.max(1, Math.ceil(totalTapeM / tape.roll_m));
   const primerCans = Math.max(1, Math.ceil(totalTapeM / 100));
@@ -2583,53 +2585,77 @@ function downloadAcm360Dxf() {
   showToast(`✓ DXF CNC exportado (Camadas: ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_ETIQUETAS)`);
 }
 
-function downloadAcm360Csv() {
+// M8: o relatório usa o mesmo acm360-report.js do plugin SketchUp
+function buildAcm360Report() {
   const m = acmStudioState.lastModel || computeAcmStudioModel(readAcmStudioInputs());
-  const profF = findAcmProfile(m.cfg.profileFrameId);
-  const b = m.bom;
+  const familyOf = (p) => {
+    const custom = acmSettings.custom_profiles.find((c) => Number(c.id) === p.id);
+    if (custom) return custom.family;
+    return p.code.startsWith('A') ? 'aluminio' : 'metalon';
+  };
+  const profiles = getAcmProfiles().map((p) => ({
+    id: p.id, name: p.name, family: familyOf(p), w_mm: p.w, h_mm: p.h, wall_mm: p.wall, price_m: p.priceM
+  }));
+  const tubes = m.tubes.map((tb) => ({
+    id: tb.id,
+    name: tb.name,
+    frame: `Fachada ${m.W}x${m.H} mm`,
+    profile_id: tb.profile.id,
+    profile_name: tb.profile.name,
+    wall_mm: tb.profile.wall,
+    material: familyOf(tb.profile) === 'aluminio' ? 'Alumínio' : 'Aço Carbono',
+    length_mm: tb.len,
+    cut_a_deg: tb.cutA,
+    cut_b_deg: tb.cutB
+  }));
+  const now = new Date();
+  return AcmReport.buildAcmReport({
+    projectName: `Fachada ACM ${m.W}x${m.H} mm`,
+    date: `${now.toLocaleDateString('pt-BR')} ${now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+    tubes,
+    trays: [{
+      code: 'P01-P' + String(m.totalTrays).padStart(2, '0'), name: `Bandeja ${m.trayW}x${m.trayH} mm`, quantity: m.totalTrays,
+      front_w_mm: m.trayW, front_h_mm: m.trayH, flat_w_mm: m.flatW, flat_h_mm: m.flatH, thickness_mm: m.preset.thickness_mm
+    }],
+    fasteners: {
+      [`Cantoneira ${m.cfg.fastenerType || 'F003'}`]: m.bom.totalCantoneiras,
+      'Parafusos autobrocantes 4.2 x 19 mm': m.bom.totalScrews,
+      'Selante PU40 (cartucho 400 g)': m.bom.totalSealantTubes
+    }
+  }, acmSettings, profiles);
+}
 
-  let csv = '\uFEFF'; // UTF-8 BOM para compatibilidade com Microsoft Excel
-  csv += `# ${acmSettings.company_name} - RELATÓRIO DE PRODUÇÃO E LISTA DE CORTE (CS ACM360)\n`;
-  csv += `# Projeto;Fachada ACM ${m.W}x${m.H} mm\n`;
-  csv += `# Data;${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}\n\n`;
-
-  csv += '--- RESUMO GERAL DE COMPRA E PRODUÇÃO ---\n';
-  csv += 'Item;Especificação;Quantidade;Unidade\n';
-  csv += `Barras de ${m.barMm}mm;${profF.name};${m.totalBarsCount};un\n`;
-  csv += `Total Metros Lineares;Tubos Estruturais;${m.totalLinearM};m\n`;
-  csv += `Chapas ACM Planificadas;Área Total Aberta;${m.totalAcmAreaM2};m²\n`;
-  csv += `Bandejas ACM;${m.trayW}x${m.trayH} mm Fechada;${m.totalTrays};un\n`;
-  csv += `Fita Dupla-Face ${b.tapeName};Rolo ${b.tapeRollM} metros;${b.vhbRolls};rolos (${b.vhbTapeM} m)\n`;
-  csv += `Primer 3M AP111 / 94;Promotor Adesão 250ml;${b.primerCans};frascos\n`;
-  csv += `Cantoneiras Fixador;Modelo ${m.cfg.fastenerType || 'F003'};${b.totalCantoneiras};un\n`;
-  csv += `Parafusos Autobrocantes;4.2 x 19mm c/ vedação;${b.totalScrews};un\n`;
-  csv += `Selante Fachada PU40;Cartucho 400g;${b.totalSealantTubes};tubos\n\n`;
-
-  csv += '--- LISTA DETALHADA DE CORTE DE TUBOS (SERRA) ---\n';
-  csv += 'Código;Função;Perfil;Comprimento (mm);Corte Esq;Corte Dir\n';
-  m.tubes.forEach((tb) => {
-    csv += `${tb.id};${tb.name};${tb.profile.name};${tb.len};${tb.cutA > 0 ? tb.cutA + '°' : '0°'};${tb.cutB > 0 ? tb.cutB + '°' : '0°'}\n`;
-  });
-  csv += '\n';
-
-  csv += '--- LISTA DE BANDEJAS ACM (CNC ROUTER) ---\n';
-  csv += 'Tag;Largura Fechada (mm);Altura Fechada (mm);Largura Aberta (mm);Altura Aberta (mm);Retorno (mm);Área Aberta (m²);Fresa\n';
-  for (let i = 1; i <= m.totalTrays; i++) {
-    const tag = `P${String(i).padStart(2, '0')}`;
-    const singleArea = ((m.flatW * m.flatH) / 1000000).toFixed(3);
-    csv += `${tag};${m.trayW};${m.trayH};${m.flatW};${m.flatH};${m.cfg.returnMm};${singleArea};${m.cfg.fresa}\n`;
-  }
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
+function downloadAcmBlob(data, type, filename) {
+  const url = URL.createObjectURL(new Blob([data], { type }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `ACM360_Relatorio_Producao_${m.W}x${m.H}mm.csv`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-  showToast(`✓ Relatório de Materiais e Lista de Corte exportados em CSV (Excel)!`);
+}
+
+function downloadAcm360Csv() {
+  const r = buildAcm360Report();
+  downloadAcmBlob('\uFEFF' + AcmReport.reportToCsv(r), 'text/csv;charset=utf-8;', `ACM360_Relatorio_${r.project_name.replace(/\W+/g, '_')}.csv`);
+  showToast('✓ Lista de corte e plano de barras exportados em CSV!');
+}
+
+function downloadAcm360Xlsx() {
+  const r = buildAcm360Report();
+  downloadAcmBlob(AcmReport.reportToXlsx(r), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', `ACM360_Relatorio_${r.project_name.replace(/\W+/g, '_')}.xlsx`);
+  showToast('✓ Relatório exportado em Excel (XLSX)!');
+}
+
+function printAcm360Report() {
+  const w = window.open('', '_blank');
+  if (!w) {
+    showToast('Permita pop-ups deste site para imprimir o relatório.');
+    return;
+  }
+  w.document.write(AcmReport.reportToHtml(buildAcm360Report(), acmSettings));
+  w.document.close();
 }
 
 function createErpOsFromAcm360() {
@@ -2977,6 +3003,8 @@ function setupAcm360StudioListeners() {
 
   document.getElementById('btnAcmExportDxf')?.addEventListener('click', downloadAcm360Dxf);
   document.getElementById('btnAcmExportCsv')?.addEventListener('click', downloadAcm360Csv);
+  document.getElementById('btnAcmExportXlsx')?.addEventListener('click', downloadAcm360Xlsx);
+  document.getElementById('btnAcmPrintReport')?.addEventListener('click', printAcm360Report);
   document.getElementById('btnAcmCreateErpOS')?.addEventListener('click', createErpOsFromAcm360);
 
   document.getElementById('inpAcmImportJson')?.addEventListener('change', (e) => {

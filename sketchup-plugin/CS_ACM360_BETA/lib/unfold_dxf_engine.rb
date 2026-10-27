@@ -434,8 +434,8 @@ module CS_ACM360_BETA
       end
 
       nesting = nest_with_settings(trays)
-      first_sheet = nesting['sheets'].first
-      unless first_sheet
+      sheets = nesting['sheets']
+      if sheets.empty?
         UI.messagebox('Não foi possível posicionar as peças na chapa padrão.')
         return
       end
@@ -444,9 +444,16 @@ module CS_ACM360_BETA
       return unless path
       path += '.dxf' unless path.downcase.end_with?('.dxf')
 
-      dxf_str = generate_dxf_ac1009(nesting['sheet_w_mm'], nesting['sheet_h_mm'], first_sheet[:placements])
-      File.write(path, dxf_str, mode: 'w:UTF-8')
-      UI.messagebox("Arquivo DXF exportado com sucesso!\n\nCamadas geradas: ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_DIRECAO, ACM_ETIQUETAS\nCaminho: #{path}")
+      # Um arquivo por chapa (um trabalho no Aspire); com uma chapa só, o arquivo é o escolhido
+      paths = sheets.each_with_index.map do |sh, i|
+        p = sheets.size == 1 ? path : path.sub(/\.dxf\z/i, "_chapa#{i + 1}.dxf")
+        File.write(p, generate_dxf_ac1009(nesting['sheet_w_mm'], nesting['sheet_h_mm'], sh[:placements]), mode: 'w:UTF-8')
+        p
+      end
+      pieces = sheets.sum { |sh| sh[:placements].size }
+      UI.messagebox("Arquivo DXF exportado com sucesso!\n\n#{pieces} peça(s) em #{sheets.size} chapa(s) de " \
+                    "#{nesting['sheet_w_mm'].round}×#{nesting['sheet_h_mm'].round} mm\n" \
+                    "Camadas geradas: ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_DIRECAO, ACM_ETIQUETAS\n\n#{paths.join("\n")}")
     end
 
     # Nesting com chapa, espaçamento e margem das Configurações (M12)
@@ -457,8 +464,8 @@ module CS_ACM360_BETA
 
     def self.collect_model_unfolded_trays(model)
       trays = []
-      model.active_entities.grep(Sketchup::Group).each do |grp|
-        next unless grp.get_attribute(Catalog::ATTR_DICT, 'kind') == 'acm_tray'
+      each_cs_group(model.entities) do |grp, kind|
+        next unless kind == 'acm_tray'
         raw = grp.get_attribute(Catalog::ATTR_DICT, 'unfold_json')
         next unless raw
         parsed = JSON.parse(raw) rescue nil
@@ -476,8 +483,7 @@ module CS_ACM360_BETA
       all_tubes = []
       trays  = []
 
-      model.active_entities.grep(Sketchup::Group).each do |grp|
-        kind = grp.get_attribute(Catalog::ATTR_DICT, 'kind')
+      each_cs_group(model.entities) do |grp, kind|
         if kind == 'parametric_frame' || kind == 'single_tube'
           p_raw = grp.get_attribute(Catalog::ATTR_DICT, 'params_json')
           t_raw = grp.get_attribute(Catalog::ATTR_DICT, 'tubes_json')
@@ -516,6 +522,25 @@ module CS_ACM360_BETA
         'bar_plan'     => bar_plan,
         'nesting'      => nesting
       }
+    end
+
+    # Percorre o modelo inteiro (grupos e componentes do usuário, em qualquer nível)
+    # entregando as estruturas, tubos avulsos e bandejas do plugin
+    CS_KINDS = %w[parametric_frame single_tube acm_tray].freeze
+
+    def self.each_cs_group(entities, &blk)
+      entities.each do |e|
+        if e.is_a?(Sketchup::Group)
+          kind = e.get_attribute(Catalog::ATTR_DICT, 'kind')
+          if CS_KINDS.include?(kind)
+            blk.call(e, kind)
+          else
+            each_cs_group(e.entities, &blk)
+          end
+        elsif e.is_a?(Sketchup::ComponentInstance)
+          each_cs_group(e.definition.entities, &blk)
+        end
+      end
     end
 
     def self.export_erp_json_dialog

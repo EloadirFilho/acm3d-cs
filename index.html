@@ -725,10 +725,16 @@
                 <button type="button" class="acm-action-btn secondary" id="btnAcmExportDxf" title="Gera arquivo DXF AC1009 com camadas ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_DIRECAO e ACM_ETIQUETAS">
                   📐 Baixar DXF CNC
                 </button>
-                <button type="button" class="acm-action-btn secondary" id="btnAcmExportCsv" title="Exporta Relatório de Materiais e Lista de Corte em CSV para Microsoft Excel">
-                  📊 Baixar CSV (Excel)
+                <button type="button" class="acm-action-btn secondary" id="btnAcmExportXlsx" title="Lista de corte, plano de barras, bandejas e materiais em Excel (XLSX)">
+                  📊 Baixar Excel (XLSX)
                 </button>
-                <a href="CS_ACM360_v1.0.0.rbz" download="CS_ACM360_v1.0.0.rbz" class="acm-action-btn secondary" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
+                <button type="button" class="acm-action-btn secondary" id="btnAcmExportCsv" title="Mesmo relatório em CSV (separado por ponto e vírgula)">
+                  📄 Baixar CSV
+                </button>
+                <button type="button" class="acm-action-btn secondary" id="btnAcmPrintReport" title="Abre o relatório com o cabeçalho da empresa para imprimir">
+                  🖨 Imprimir Relatório
+                </button>
+                <a href="CS_ACM360_v1.0.2.rbz" download="CS_ACM360_v1.0.2.rbz" class="acm-action-btn secondary" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
                   📦 Plugin .RBZ
                 </a>
                 <label class="acm-action-btn secondary" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
@@ -877,6 +883,7 @@
   </div>
 
   <script src="acm360-settings.js"></script>
+  <script src="sketchup-plugin/CS_ACM360_BETA/ui/acm360-report.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

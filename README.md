@@ -1,7 +1,7 @@
 # 🏗️ acm3d-cs — CS ACM360 SketchUp Plugin & ERP Studio
 
 Sistema híbrido de engenharia para **Fachadas em ACM e Estruturas Metálicas**, composto por:
-1. **Plugin Nativo para SketchUp (`CS_ACM360_v1.0.0.rbz`)**: Geração paramétrica 3D de estruturas metálicas (Metalon/Alumínio), bandejas de ACM, leitura automática de juntas (`Ler ACM → Estrutura`), planificação 2D/3D e exportação de planos de corte em **DXF CNC (`AC1009`)**.
+1. **Plugin Nativo para SketchUp (`CS_ACM360_v1.0.2.rbz`)**: Geração paramétrica 3D de estruturas metálicas (Metalon/Alumínio), bandejas de ACM, leitura automática de juntas (`Ler ACM → Estrutura`), planificação 2D/3D e exportação de planos de corte em **DXF CNC (`AC1009`)**.
 2. **Painel Web Integrado (`CS Fachadas · Totem Chão de Fábrica + ACM360 Studio`)**: Estúdio CAD/CAM no navegador integrado ao controle de Ordens de Serviço (OS), movimentação de materiais, aproveitamento de barras de `6000 mm` (FFD 1D) e gestão de chapas e retalhos 2D.
 
 ---
@@ -10,9 +10,9 @@ Sistema híbrido de engenharia para **Fachadas em ACM e Estruturas Metálicas**,
 
 ```text
 acm3d-cs/
-├── CS_ACM360_v1.0.0.rbz                # Plugin ORIGINAL (em produção — não alterar)
-├── CS_ACM360_v1.0.1.rbz                # Original + correção do "Gerar Estrutura no 3D" (tools/patch_original.py)
-├── CS_ACM360_BETA_v1.1.0-beta.rbz      # Plugin BETA (em desenvolvimento; instala ao lado do original)
+├── CS_ACM360_v1.0.0.rbz                # Plugin ORIGINAL sem correções (base dos patches — não alterar)
+├── CS_ACM360_v1.0.2.rbz                # ORIGINAL corrigido para produção (tools/patch_original.py) — instale este
+├── CS_ACM360_BETA_v1.2.2-beta.rbz      # Plugin BETA (em desenvolvimento; instala ao lado do original)
 ├── tools/build_rbz.py                  # Gera o .rbz BETA a partir de sketchup-plugin/
 ├── PLANO_PROJETO.md                    # Plano técnico, arquitetura, fórmulas e roadmap Fase 1
 ├── docs/
@@ -38,10 +38,11 @@ acm3d-cs/
         │   ├── acm_tray_kernel.rb      # Motor 3D de Bandejas ACM, Malha e Leitura ACM → Estrutura
         │   ├── unfold_dxf_engine.rb    # Motor de Planificação 2D/3D, Nesting e Exportador DXF AC1009
         │   ├── hardware_fasteners.rb   # M3/M4: Fita 3M VHB, reforços e distribuição de cantoneiras F003
-        │   ├── report_generator.rb     # M8: Relatório estrutural, lista de corte e exportação CSV (Excel)
+        │   ├── report_generator.rb     # M8: contagem de fixadores e gravação dos arquivos do relatório
         │   └── studio_dialog.rb        # Ponte Ruby <-> UI::HtmlDialog
         └── ui/
-            └── studio.html             # Interface do Construtor ao Vivo dentro do SketchUp
+            ├── studio.html             # Interface do Construtor ao Vivo dentro do SketchUp
+            └── acm360-report.js        # M8: relatório (lista de corte, plano de barras, XLSX/CSV/impressão) — usado também pelo painel web
 ```
 
 ---
@@ -61,26 +62,29 @@ acm3d-cs/
 1. Abra o **SketchUp 2025**.
 2. Acesse **Extensões > Gerenciador de Extensões** (ou **Janela > Gerenciador de Extensões**).
 3. Clique no botão **Instalar Extensão…** no canto inferior.
-4. Selecione o arquivo **`CS_ACM360_v1.0.0.rbz`** localizado na raiz deste repositório.
+4. Selecione o arquivo **`CS_ACM360_v1.0.2.rbz`** localizado na raiz deste repositório.
 5. A barra de ferramentas **`CS ACM360`** e o menu **`Extensões > CS ACM360 · Estruturas & ACM`** ficarão disponíveis imediatamente.
 
 ### Original × BETA
 
 | | Original (produção) | BETA (desenvolvimento) |
 | :--- | :--- | :--- |
-| Pacote | `CS_ACM360_v1.0.0.rbz` | `CS_ACM360_BETA_v1.1.0-beta.rbz` |
+| Pacote | `CS_ACM360_v1.0.2.rbz` (correções sobre a 1.0.0) | `CS_ACM360_BETA_v1.2.2-beta.rbz` |
 | Menu / barra | `CS ACM360` | `CS ACM360 BETA` |
 | Código Ruby | módulo `CS_ACM360` (histórico do git, commit `6081a4d`) | módulo `CS_ACM360_BETA` em `sketchup-plugin/` |
 
 - Os dois podem ficar instalados **ao mesmo tempo**: o BETA tem nome, pasta, módulo, menu, barra e preferências próprios, então instalar ou desinstalar um não mexe no outro.
 - Os dois leem e editam as mesmas estruturas e bandejas do modelo (mesmos atributos e camadas), então um projeto feito no original pode ser aberto no BETA. Para não arriscar entregas, teste o BETA em uma **cópia** do `.skp`.
+- Ao instalar uma versão nova por cima, **feche e abra o SketchUp**: até reiniciar, o SketchUp continua com o código antigo na memória e só a tela muda. Confira a versão no selo ao lado do título do painel.
+- **Original v1.0.2**: mesmas funções da 1.0.0, só com correções — "Gerar Estrutura no 3D", tubo avulso com corte inclinado, DXF com um arquivo por chapa (antes só a 1ª chapa era gravada) e DXF/ERP lendo bandejas dentro de grupos. Gerado por `python tools/patch_original.py`; testado com `tools/run_sketchup_tests.ps1 -Original CS_ACM360_v1.0.2.rbz`.
 - Para gerar o BETA de novo após mudanças: `python tools/build_rbz.py`. O pacote original nunca é regravado.
+- Teste automático dentro do SketchUp 2025 (com o SketchUp fechado): `powershell -ExecutionPolicy Bypass -File tools/run_sketchup_tests.ps1`. Instala o BETA desta pasta, abre o SketchUp, cria estruturas e bandejas, testa relatório, DXF e ERP, e fecha sozinho.
 
 ### Principais comandos do plugin
 - **Estruturas**: Novo Gradil com Travessas, Tubo Avulso, Ler ACM → Estrutura, cores por tipo/comprimento/acabamento.
 - **Bandejas ACM**: Bandeja paramétrica, Fachada em Malha, Planificar no 3D, Plano de Corte e Exportar DXF CNC.
 - **Fixadores & Colagem**: Distribuir Cantoneiras (F003) na seleção, Calcular Fita 3M VHB & Promotor de Adesão, inserir blocos F001/F002/F003.
-- **Relatório**: Relatório Estrutural & Plano de Barras 1D, Exportar Lista de Corte CSV (Excel).
+- **Relatório** (aba 4 do painel): resumo de compra por bitola (metros, barras, aproveitamento, peso e custo), lista de corte consolidada com corte A/B, plano de barras, bandejas, fita VHB e fixadores. Exporta **Excel (XLSX)**, **CSV** e **imprime** com o cabeçalho da empresa. Lê o modelo inteiro, inclusive peças dentro de grupos.
 - **Publicar**: exporta o pacote `.json` para o CS Fachadas ERP.
 - **Configurações** (somente BETA, aba 5 do painel): barra comercial, serra, chapa ACM, fator de dobra por fornecedor/espessura, fitas, preço por metro das bitolas, bitolas próprias e cabeçalho de impressão. Fica salvo na máquina e dentro do `.skp`.
 
@@ -109,7 +113,8 @@ Na barra superior do sistema, clique na aba **`ACM360 Studio`** para acessar:
   - `ACM_VINCO` (Magenta — ACI 174)
   - `ACM_DIRECAO` (Cinza — ACI 8)
   - `ACM_ETIQUETAS` (Branco — ACI 7)
-- **3. Materiais, VHB & Fixadores**: Lista de materiais (BOM), metros e rolos de fita 3M VHB (4910 / 4941 / 4955), quantidade de cantoneiras, parafusos e buchas, com **📊 Baixar CSV (Excel)**.
+  - No plugin BETA, quando as peças não cabem numa chapa, sai um arquivo por chapa (`_chapa1.dxf`, `_chapa2.dxf`…).
+- **3. Materiais, VHB & Fixadores**: Lista de materiais (BOM), metros e rolos de fita 3M VHB (4910 / 4941 / 4955), quantidade de cantoneiras, parafusos e buchas, com **📊 Baixar Excel (XLSX)**, **CSV** e **🖨 Imprimir Relatório** (mesmo relatório do plugin).
 - **4. Configurações**: os mesmos padrões do plugin, salvos no navegador. **Exportar/Importar JSON** leva a configuração do plugin para a web e vice-versa (`CS_ACM360_SETTINGS_V1`).
 - **🚀 Gerar OS + Enviar Barras & Chapas p/ Produção**: Cria instantaneamente uma Ordem de Serviço no Quadro do Chão de Fábrica com a quantidade exata de metros lineares/barras de Metalon e área ($\text{m}^2$) de chapas de ACM.
 
@@ -122,7 +127,7 @@ Na barra superior do sistema, clique na aba **`ACM360 Studio`** para acessar:
 | Fase 1 — MVP (gradil, tubos, bandejas, Ler ACM, planificação, DXF, OS no ERP) | ✅ Concluído |
 | M3 — Colagem (fita 3M VHB e reforços) | 🟡 Parcial (cálculo de metros/rolos; desenho da fita e tiras pendentes) |
 | M4 — Fixadores avançados | 🟡 Parcial (distribuição de cantoneiras F003 e consumo de parafusos/buchas) |
-| M8 — Relatório, lista de corte e exportação | 🟡 Parcial (relatório + CSV; XLSX pendente) |
+| M8 — Relatório, lista de corte e exportação | ✅ Concluído no BETA (filtros por seleção e colunas configuráveis adiados) |
 | M12 — Configurações | ✅ Concluído no BETA (idiomas e verificação de atualização adiados) |
 | M1, M2, M5, M6, M7, M9, M10, M11 | ⬜ Planejado |
 

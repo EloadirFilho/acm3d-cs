@@ -117,6 +117,16 @@ flowchart TD
 - Plugin: janela de relatório lendo os dados salvos nos grupos (`tubes_json`).
 - Web: mesma tela, reaproveitando o mesmo JavaScript (um único `report.js` usado nos dois lados, como faz a referência com `host-sketchup.js` / `host-web.js`).
 
+**Status (27/10/2026): entregue no BETA 1.2.2**
+- `ui/acm360-report.js` é o único código de relatório, usado pelo plugin (aba 4) e pelo painel web; testes em `tests/acm360-report.test.js`.
+- Lista de corte consolidada (perfil + comprimento + corte A/B), plano de barras com FFD, *best fit* e melhor preenchimento (subset-sum em mm) escolhendo o que usa menos barras, perda angular `kerf × (1/cos θ − 1)` limitada a 75°.
+- Peça maior que a barra sem emenda gera aviso. Peso por bitola (aço 7,85 / alumínio 2,70 g/cm³) e custo das barras compradas quando o R$/m está cadastrado no M12.
+- XLSX gerado sem biblioteca (zip + SpreadsheetML), CSV com `;` e vírgula decimal, impressão em HTML com cabeçalho da empresa (no plugin abre no navegador padrão).
+- Corrigido: o relatório antigo lia atributos que os kernels não gravam (tubos sumiam e toda bandeja saía 1000×600); a fita VHB do plugin e a distribuição de cantoneiras liam as mesmas medidas erradas; relatório, ERP e DXF liam só o nível aberto para edição e agora percorrem o modelo inteiro.
+- **Adiado**: escopo "Selecionadas", filtros por tipo e colunas/formatos configuráveis.
+- Validado no SketchUp 2025 com `tools/run_sketchup_tests.ps1` (19 verificações, incluindo os botões do painel) e XLSX aberto no Excel. LibreOffice ainda não testado.
+- Corrigido junto: tubo avulso com corte inclinado não era desenhado (erro ao criar) e o DXF gravava só a primeira chapa do plano de corte; agora sai um arquivo por chapa (`_chapa1.dxf`, `_chapa2.dxf`…), e com uma chapa só o arquivo continua igual.
+
 **Critérios de aceite**
 - Para um caso de teste conhecido, o número de barras bate com o cálculo manual.
 - Peças com ponta reta não ganham perda de serra extra.

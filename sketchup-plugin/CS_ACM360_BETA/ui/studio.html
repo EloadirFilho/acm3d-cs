@@ -145,6 +145,7 @@
     .btn.small { height: 26px; padding: 0 10px; font-size: 11.5px; }
     .btn.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
     .hint { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+    .report-warn { border: 1px solid var(--warning); color: var(--warning); border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; font-size: 12px; }
     .logo-preview { max-height: 48px; max-width: 200px; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
     .footer {
       padding: 10px 16px;
@@ -160,7 +161,7 @@
   <header class="top-bar">
     <div class="brand">
       <span>CS ACM360 BETA · SketchUp Studio</span>
-      <span class="badge">v1.0.0 Híbrido ERP</span>
+      <span class="badge" id="versionBadge">BETA</span>
     </div>
     <div class="btn-row">
       <button type="button" class="btn" onclick="CSStudio.callRuby('export_dxf')">Exportar DXF CNC</button>
@@ -397,21 +398,60 @@
     <!-- ABA 4: RELATÓRIO E PLANO DE CORTE -->
     <section class="panel" id="panel-report">
       <div class="card">
-        <h3>Resumo do Modelo Ativo (Tubos, Barras 6000mm e Bandejas ACM)</h3>
+        <h3>Resumo de Compra por Bitola</h3>
         <div id="reportSummaryText" style="margin-bottom:8px; color:var(--muted);">Carregando leitura do modelo...</div>
-        <div tabindex="0" role="region" aria-label="Lista de corte de tubos e bandejas" class="table-wrapper">
+        <div id="reportWarnings" class="report-warn" hidden></div>
+        <div tabindex="0" role="region" aria-label="Resumo por bitola" class="table-wrapper">
           <table>
             <thead>
-              <tr>
-                <th>Código</th>
-                <th>Descrição / Perfil</th>
-                <th>Medida / Corte</th>
-                <th>Aproveitamento</th>
-              </tr>
+              <tr><th>Bitola</th><th>Material</th><th>Peças</th><th>Metros</th><th>Barras</th><th>Aprov.</th><th>Peso</th><th>Custo</th></tr>
             </thead>
-            <tbody id="reportTableBody"></tbody>
+            <tbody id="reportProfilesBody"></tbody>
           </table>
         </div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button type="button" class="btn success" onclick="CSStudio.exportReport('xlsx')">📊 Exportar Excel (XLSX)</button>
+          <button type="button" class="btn" onclick="CSStudio.exportReport('csv')">Exportar CSV</button>
+          <button type="button" class="btn" onclick="CSStudio.printReport()">🖨 Imprimir</button>
+        </div>
+        <p class="hint">Lê todas as estruturas, tubos avulsos e bandejas do modelo, inclusive dentro de grupos. Preços e cabeçalho de impressão vêm da aba Configurações.</p>
+      </div>
+
+      <div class="card">
+        <h3>Lista de Corte (Serra)</h3>
+        <div tabindex="0" role="region" aria-label="Lista de corte" class="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Bitola</th><th>Comprimento (mm)</th><th>Corte A/B</th><th>Qtd</th><th>Total (m)</th><th>Peças</th></tr>
+            </thead>
+            <tbody id="reportCutBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 id="reportPlanTitle">Plano de Barras</h3>
+        <div tabindex="0" role="region" aria-label="Plano de barras" class="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Bitola</th><th>Barra</th><th>Cortes (mm)</th><th>Sobra (mm)</th></tr>
+            </thead>
+            <tbody id="reportPlanBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Bandejas ACM, Colagem e Fixadores</h3>
+        <div tabindex="0" role="region" aria-label="Bandejas ACM" class="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Código</th><th>Nome</th><th>Qtd</th><th>Face (mm)</th><th>Chapa aberta (mm)</th><th>Esp.</th><th>Área (m²)</th></tr>
+            </thead>
+            <tbody id="reportTraysBody"></tbody>
+          </table>
+        </div>
+        <div id="reportExtras" class="hint"></div>
       </div>
     </section>
 
@@ -601,13 +641,22 @@
     <button type="button" class="btn" onclick="CSStudio.callRuby('refresh_state')">↻ Atualizar Leitura</button>
   </footer>
 
+  <script src="acm360-report.js"></script>
   <script>
     window.CSStudio = {
       state: null,
       callRuby: function(action, payload) {
         if (window.sketchup && window.sketchup[action]) {
           window.sketchup[action](payload || '');
+          return true;
         }
+        // Tela nova com código Ruby antigo na memória: acontece ao instalar sem reiniciar o SketchUp
+        this.showError('O plugin não respondeu ao comando "' + action + '". Feche e abra o SketchUp depois de instalar a nova versão.');
+        return false;
+      },
+      showError: function(msg) {
+        this.setStatus('⚠ ' + msg);
+        alert(msg);
       },
       switchTab: function(tabId) {
         var btns = document.querySelectorAll('.tab-btn');
@@ -644,7 +693,12 @@
           this.settingsDraft = JSON.parse(JSON.stringify(st));
           this.renderSettings();
         }
-        this.renderReport();
+        if (data.plugin_version) document.getElementById('versionBadge').textContent = 'v' + data.plugin_version;
+        try {
+          this.renderReport();
+        } catch (e) {
+          this.setStatus('⚠ Relatório indisponível: ' + e.message);
+        }
       },
       esc: function(v) {
         return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) {
@@ -861,31 +915,109 @@
         };
         this.callRuby('create_facade_grid', JSON.stringify(payload));
       },
-      renderReport: function() {
+      // --- M8: relatório calculado em acm360-report.js (mesmo código do painel web) ---
+      report: null,
+      buildReport: function() {
         var d = this.state || {};
-        var bp = d.bar_plan || {};
-        var trays = d.trays || [];
-        var sumEl = document.getElementById('reportSummaryText');
-        if (sumEl) {
-          sumEl.textContent = 'Tubos: ' + (bp.total_pieces || 0) + ' pçs · Total Linear: ' +
-            (bp.total_linear_m || 0) + ' m · Barras (' + (bp.bar_mm || 6000) + ' mm): ' + (bp.total_bars || 0) +
-            ' · Bandejas ACM: ' + trays.length;
+        var tubes = [];
+        (d.frames || []).forEach(function(f) {
+          (f.tubes || []).forEach(function(t) {
+            var c = {};
+            for (var k in t) c[k] = t[k];
+            c.frame = f.name;
+            tubes.push(c);
+          });
+        });
+        var trays = (d.trays || []).map(function(t) {
+          var cfg = t.tray || {}, u = t.unfold || {};
+          return {
+            code: u.code || cfg.code, name: u.name || cfg.name, quantity: u.quantity || cfg.quantity,
+            front_w_mm: u.front_w_mm || cfg.width_mm, front_h_mm: u.front_h_mm || cfg.height_mm,
+            flat_w_mm: u.width, flat_h_mm: u.height, thickness_mm: cfg.thickness_mm, color: cfg.color_hex
+          };
+        });
+        var now = new Date();
+        var pad = function(n) { return (n < 10 ? '0' : '') + n; };
+        this.report = AcmReport.buildAcmReport({
+          projectName: d.project_name,
+          date: pad(now.getDate()) + '/' + pad(now.getMonth() + 1) + '/' + now.getFullYear() + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes()),
+          tubes: tubes, trays: trays, fasteners: d.fasteners || {}
+        }, d.settings || {}, d.profiles || []);
+        return this.report;
+      },
+      renderReport: function() {
+        var esc = this.esc;
+        var r = this.buildReport();
+        var num = function(v) { return String(v).replace('.', ','); };
+        var money = function(v) { return v == null ? '—' : 'R$ ' + v.toFixed(2).replace('.', ','); };
+        var empty = function(cols, msg) { return '<tr><td colspan="' + cols + '">' + msg + '</td></tr>'; };
+
+        document.getElementById('reportSummaryText').textContent =
+          r.totals.pieces + ' peça(s) · ' + num(r.totals.meters) + ' m · ' + r.totals.bars + ' barra(s) de ' + r.bar_mm +
+          ' mm · ' + num(r.totals.weight_kg) + ' kg · ACM ' + num(r.totals.acm_m2) + ' m² em ' + r.totals.trays + ' bandeja(s)' +
+          (r.totals.cost != null ? ' · ' + money(r.totals.cost) : '');
+
+        var warn = document.getElementById('reportWarnings');
+        warn.hidden = !r.warnings.length;
+        warn.innerHTML = r.warnings.map(esc).join('<br>');
+
+        document.getElementById('reportProfilesBody').innerHTML = r.profiles.map(function(p) {
+          return '<tr><th>' + esc(p.profile_name) + '</th><td>' + esc(p.material) + '</td><td>' + p.pieces + '</td><td>' +
+            num(p.meters) + '</td><td>' + p.bars + '</td><td>' + num(p.utilization_pct) + '%</td><td>' + num(p.weight_kg) +
+            ' kg</td><td>' + money(p.cost) + '</td></tr>';
+        }).join('') || empty(8, 'Nenhuma estrutura ou tubo no modelo.');
+
+        document.getElementById('reportCutBody').innerHTML = r.cut_list.map(function(l) {
+          return '<tr><th>' + esc(l.profile_name) + '</th><td>' + num(l.length_mm) + '</td><td>' + esc(l.cut) + '</td><td>' +
+            l.qty + '</td><td>' + num(l.total_m) + '</td><td>' + esc(l.refs.join(' ')) + '</td></tr>';
+        }).join('') || empty(6, 'Nenhuma peça para cortar.');
+
+        document.getElementById('reportPlanTitle').textContent = 'Plano de Barras (' + r.bar_mm + ' mm · serra ' + num(r.kerf_mm) + ' mm)';
+        var plan = '';
+        r.profiles.forEach(function(p) {
+          p.plan.forEach(function(b, i) {
+            plan += '<tr><th>' + esc(p.profile_name) + '</th><td>' + (i + 1) + '</td><td>' +
+              b.pieces.map(function(x) { return num(x.length_mm); }).join(' + ') + '</td><td>' + num(b.leftover_mm) + '</td></tr>';
+          });
+        });
+        document.getElementById('reportPlanBody').innerHTML = plan || empty(4, 'Sem barras para planejar.');
+
+        document.getElementById('reportTraysBody').innerHTML = r.trays.map(function(t) {
+          return '<tr><th>' + esc(t.code) + '</th><td>' + esc(t.name) + '</td><td>' + t.qty + '</td><td>' +
+            num(t.front_w_mm) + ' × ' + num(t.front_h_mm) + '</td><td>' + num(t.flat_w_mm) + ' × ' + num(t.flat_h_mm) +
+            '</td><td>' + num(t.thickness_mm) + ' mm</td><td>' + num(t.area_m2) + '</td></tr>';
+        }).join('') || empty(7, 'Nenhuma bandeja ACM no modelo.');
+
+        var fx = Object.keys(r.fasteners).map(function(k) { return esc(k) + ': ' + r.fasteners[k] + ' un'; });
+        document.getElementById('reportExtras').innerHTML = r.trays.length || fx.length
+          ? esc(r.vhb.tape_name) + ': ' + num(r.vhb.meters) + ' m · ' + r.vhb.rolls + ' rolo(s) de ' + num(r.vhb.roll_m) +
+            ' m · primer: ' + r.vhb.primer_cans + ' frasco(s)' + (fx.length ? ' · ' + fx.join(' · ') : '')
+          : '';
+      },
+      reportFileName: function(ext) {
+        var base = String((this.report && this.report.project_name) || 'relatorio').replace(/[\\/:*?"<>|]+/g, '_');
+        return base + '_corte.' + ext;
+      },
+      exportReport: function(kind) {
+        try {
+          var r = this.report || this.buildReport();
+          var payload = kind === 'xlsx'
+            ? { filename: this.reportFileName('xlsx'), base64: AcmReport.bytesToBase64(AcmReport.reportToXlsx(r)) }
+            : { filename: this.reportFileName('csv'), text: AcmReport.reportToCsv(r) };
+          if (this.callRuby('save_report_file', JSON.stringify(payload))) this.setStatus('Escolha onde salvar o relatório…');
+        } catch (e) {
+          this.showError('Erro ao gerar o relatório: ' + e.message);
         }
-        var tbody = document.getElementById('reportTableBody');
-        if (!tbody) return;
-        var html = '';
-        (bp.groups || []).forEach(function(g) {
-          html += '<tr><th>' + g.profile_name + '</th><td>' + g.material + ' (' + g.pieces.length + ' pçs)</td>' +
-            '<td>' + g.bars_count + ' barra(s) de ' + (bp.bar_mm || 6000) + 'mm</td>' +
-            '<td>' + g.utilization_pct + '% aproveitamento</td></tr>';
-        });
-        trays.forEach(function(t) {
-          var u = t.unfold || {};
-          html += '<tr><th>' + (u.code || 'ACM') + '</th><td>' + (u.name || 'Bandeja ACM') + '</td>' +
-            '<td>Planificada: ' + (u.width || 0) + ' × ' + (u.height || 0) + ' mm</td>' +
-            '<td>' + (u.area_m2 || 0) + ' m²</td></tr>';
-        });
-        tbody.innerHTML = html || '<tr><td colspan="4">Nenhuma estrutura ou bandeja criada ainda no modelo.</td></tr>';
+      },
+      printReport: function() {
+        try {
+          var r = this.report || this.buildReport();
+          if (this.callRuby('print_report', AcmReport.reportToHtml(r, (this.state && this.state.settings) || {}))) {
+            this.setStatus('Relatório aberto no navegador para impressão');
+          }
+        } catch (e) {
+          this.showError('Erro ao gerar o relatório: ' + e.message);
+        }
       }
     };
     window.addEventListener('DOMContentLoaded', function() {

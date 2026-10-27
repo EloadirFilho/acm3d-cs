@@ -480,6 +480,7 @@ module CS_ACM360_BETA
       d  = mm(tube[:d_mm])
       h  = mm(tube[:h_mm])
 
+      pts_front = nil
       if tube[:cut_a_deg].to_f == 45.0 && tube[:cut_b_deg].to_f == 45.0 && tube[:group_role] == 'quadro'
         # Meia-esquadria 45° no plano frontal X-Z (fiel ao bloco A003)
         pts_front = case tube[:slot]
@@ -512,12 +513,34 @@ module CS_ACM360_BETA
                         Geom::Point3d.new(x0, y0, z0 + w)
                       ]
                     end
-        if pts_front
-          face = grp.entities.add_face(pts_front)
-          if face
-            face.reverse! if face.normal.y < 0
-            face.pushpull(d)
-          end
+      end
+      # Tubo horizontal com corte inclinado (tubo avulso, trecho com emenda): trapézio no plano X-Z.
+      # A face maior fica embaixo; na travessa superior da moldura ela fica em cima.
+      if pts_front.nil? && tube[:axis] == 'x' && (tube[:cut_a_deg].to_f > 0.0 || tube[:cut_b_deg].to_f > 0.0)
+        la = h * Math.tan(tube[:cut_a_deg].to_f.clamp(0.0, 75.0).degrees)
+        lb = h * Math.tan(tube[:cut_b_deg].to_f.clamp(0.0, 75.0).degrees)
+        pts_front = if tube[:slot].to_s == 'sup'
+                      [
+                        Geom::Point3d.new(x0 + la, y0, z0),
+                        Geom::Point3d.new(x0 + w - lb, y0, z0),
+                        Geom::Point3d.new(x0 + w, y0, z0 + h),
+                        Geom::Point3d.new(x0, y0, z0 + h)
+                      ]
+                    else
+                      [
+                        Geom::Point3d.new(x0, y0, z0),
+                        Geom::Point3d.new(x0 + w, y0, z0),
+                        Geom::Point3d.new(x0 + w - lb, y0, z0 + h),
+                        Geom::Point3d.new(x0 + la, y0, z0 + h)
+                      ]
+                    end
+      end
+
+      if pts_front
+        face = grp.entities.add_face(pts_front)
+        if face
+          face.reverse! if face.normal.y < 0
+          face.pushpull(d)
         end
       else
         # Prisma retangular padrão

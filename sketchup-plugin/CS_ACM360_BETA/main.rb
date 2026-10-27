@@ -79,7 +79,7 @@ module CS_ACM360_BETA
 
     ext_menu.add_separator
     ext_menu.add_item('Relatório Estrutural & Plano de Barras 1D…') { StudioDialog.show('report') }
-    ext_menu.add_item('Exportar Lista de Corte CSV (Excel)…') { ReportGenerator.export_csv_dialog }
+    ext_menu.add_item('Exportar Lista de Corte (Excel XLSX / CSV)…') { StudioDialog.show('report') }
     ext_menu.add_item('Publicar Projeto para CS Fachadas ERP (.json)…') do
       UnfoldDxfEngine.export_erp_json_dialog
     end
@@ -114,8 +114,8 @@ module CS_ACM360_BETA
     cmd_dxf.status_bar_text = 'Gera arquivo DXF com camadas ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_DIRECAO e ACM_ETIQUETAS'
     toolbar.add_item(cmd_dxf)
 
-    cmd_report = UI::Command.new('Relatório & CSV') { ReportGenerator.export_csv_dialog }
-    cmd_report.tooltip = 'Exportar Lista de Corte e Materiais para Excel (CSV)'
+    cmd_report = UI::Command.new('Relatório & Excel') { StudioDialog.show('report') }
+    cmd_report.tooltip = 'Relatório de produção: lista de corte, plano de barras e materiais (XLSX, CSV e impressão)'
     cmd_report.status_bar_text = 'Gera relatório com resumo de materiais, lista de corte de tubos e bandejas de ACM'
     toolbar.add_item(cmd_report)
 
@@ -146,7 +146,7 @@ module CS_ACM360_BETA
         sub.add_item('Exportar DXF CNC…') { UnfoldDxfEngine.export_model_trays_to_dxf }
       end
       sub.add_separator
-      sub.add_item('Exportar Relatório CSV (Excel)…') { ReportGenerator.export_csv_dialog }
+      sub.add_item('Relatório de Produção (Excel / Impressão)…') { StudioDialog.show('report') }
       sub.add_item('Publicar para CS Fachadas ERP…') { UnfoldDxfEngine.export_erp_json_dialog }
     end
 
