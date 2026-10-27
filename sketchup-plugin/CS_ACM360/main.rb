@@ -9,6 +9,8 @@ require 'sketchup.rb'
 require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'catalog')
 require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'frame_kernel')
 require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'acm_tray_kernel')
+require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'hardware_fasteners')
+require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'report_generator')
 require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'unfold_dxf_engine')
 require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'studio_dialog')
 
@@ -46,14 +48,37 @@ module CS_ACM360
       UnfoldDxfEngine.export_model_trays_to_dxf
     end
 
-    # Submenu Fixadores 3D
-    sub_fix = ext_menu.add_submenu('Inserir Fixadores 3D')
-    sub_fix.add_item('Ancoragem (F001)')          { AcmTrayKernel.insert_fastener_block('F001') }
-    sub_fix.add_item('Espera (F002)')             { AcmTrayKernel.insert_fastener_block('F002') }
-    sub_fix.add_item('Cantoneira Fixador (F003)') { AcmTrayKernel.insert_fastener_block('F003') }
+    # Submenu Fixadores 3D & Colagem
+    sub_fix = ext_menu.add_submenu('Fixadores 3D & Colagem VHB')
+    sub_fix.add_item('Distribuir Cantoneiras (F003) na Seleção…') do
+      sel = Sketchup.active_model.selection.grep(Sketchup::Group).select { |g| g.get_attribute(Catalog::ATTR_DICT, 'kind') == 'acm_tray' }
+      if sel.empty?
+        UI.messagebox('Selecione pelo menos uma Bandeja ACM para distribuir cantoneiras.')
+      else
+        sel.each { |t| HardwareFasteners.distribute_fasteners_on_tray(t) }
+        UI.messagebox("Cantoneiras distribuídas com sucesso em #{sel.size} bandeja(s)!")
+      end
+    end
+    sub_fix.add_item('Calcular Fita 3M VHB & Promotor de Adesão…') do
+      vhb = HardwareFasteners.calculate_vhb_tape_requirements
+      UI.messagebox(
+        "--- CÁLCULO DE COLAGEM 3M VHB ---\n\n" \
+        "Bandejas Analisadas: #{vhb[:tray_count]}\n" \
+        "Perímetro de Dobras: #{vhb[:perimeter_meters]} m\n" \
+        "Reforços Intermediários: #{vhb[:stiffener_meters]} m\n" \
+        "Total Fita VHB: #{vhb[:total_tape_meters]} m\n" \
+        "Rolos de 33m recomendados: #{vhb[:rolls_needed]} rolo(s)\n" \
+        "Promotor Primer 3M AP111 / 94: #{vhb[:primer_cans]} frasco(s) (250ml)"
+      )
+    end
+    sub_fix.add_separator
+    sub_fix.add_item('Inserir Ancoragem (F001)')          { AcmTrayKernel.insert_fastener_block('F001') }
+    sub_fix.add_item('Inserir Espera (F002)')             { AcmTrayKernel.insert_fastener_block('F002') }
+    sub_fix.add_item('Inserir Cantoneira Fixador (F003)') { AcmTrayKernel.insert_fastener_block('F003') }
 
     ext_menu.add_separator
     ext_menu.add_item('Relatório Estrutural & Plano de Barras 1D…') { StudioDialog.show('report') }
+    ext_menu.add_item('Exportar Lista de Corte CSV (Excel)…') { ReportGenerator.export_csv_dialog }
     ext_menu.add_item('Publicar Projeto para CS Fachadas ERP (.json)…') do
       UnfoldDxfEngine.export_erp_json_dialog
     end
@@ -86,6 +111,11 @@ module CS_ACM360
     cmd_dxf.status_bar_text = 'Gera arquivo DXF com camadas ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_DIRECAO e ACM_ETIQUETAS'
     toolbar.add_item(cmd_dxf)
 
+    cmd_report = UI::Command.new('Relatório & CSV') { ReportGenerator.export_csv_dialog }
+    cmd_report.tooltip = 'Exportar Lista de Corte e Materiais para Excel (CSV)'
+    cmd_report.status_bar_text = 'Gera relatório com resumo de materiais, lista de corte de tubos e bandejas de ACM'
+    toolbar.add_item(cmd_report)
+
     cmd_erp = UI::Command.new('Publicar ERP') { UnfoldDxfEngine.export_erp_json_dialog }
     cmd_erp.tooltip = 'Publicar para CS Fachadas ERP (.json)'
     cmd_erp.status_bar_text = 'Exporta estruturas, plano de barras e chapas ACM para o CS Fachadas ERP'
@@ -108,10 +138,12 @@ module CS_ACM360
         sub.add_item('Ver Relatório e Emendas de Barra…') { StudioDialog.show('report') }
       elsif kind == 'acm_tray'
         sub.add_item('Planificar Bandeja no 3D') { UnfoldDxfEngine.place_unfolded_tray_in_model(first) }
+        sub.add_item('Distribuir Cantoneiras (F003)') { HardwareFasteners.distribute_fasteners_on_tray(first) }
         sub.add_item('Criar Estrutura Metálica desta(s) Bandeja(s)') { AcmTrayKernel.create_frame_from_trays }
         sub.add_item('Exportar DXF CNC…') { UnfoldDxfEngine.export_model_trays_to_dxf }
       end
       sub.add_separator
+      sub.add_item('Exportar Relatório CSV (Excel)…') { ReportGenerator.export_csv_dialog }
       sub.add_item('Publicar para CS Fachadas ERP…') { UnfoldDxfEngine.export_erp_json_dialog }
     end
 
