@@ -48,6 +48,12 @@ module CSBetaTests
       UI.define_singleton_method(:openURL) { |url| CSBetaTests.opened_urls << url; true }
     end
 
+    def fastener_instances(group)
+      group.entities.grep(Sketchup::Group)
+           .select { |g| g.get_attribute('CS_ACM360_DATA', 'kind') == 'fastener_array' }
+           .flat_map { |g| g.entities.grep(Sketchup::ComponentInstance) }
+    end
+
     def tubes_of(payload, frame_name)
       f = payload['frames'].find { |x| x['name'] == frame_name }
       f ? f['tubes'] : []
@@ -136,10 +142,70 @@ module CSBetaTests
         check('fita VHB usa as medidas reais', v[:perimeter_meters] == 8.0 && v[:stiffener_meters] == 2.8, v)
       end
 
-      guard('distribuir cantoneiras e contar fixadores') do
-        P::HardwareFasteners.distribute_fasteners_on_tray(tray)
+      guard('cantoneiras na bandeja (M4)') do
+        hf = P::HardwareFasteners
+        cfg = hf.tray_cfg(tray)
+        spacing, margin = P::Settings.get('fastener_spacing_mm'), P::Settings.get('fastener_offset_mm')
+        expected = %w[inf sup esq dir].sum do |s|
+          e = cfg['edges'][s]
+          next 0 unless %w[dobra dobra_aba].include?(e['type']) && e['return_mm'].to_f > 2
+          hf.positions(%w[inf sup].include?(s) ? 1200.0 : 800.0, spacing, margin).size
+        end
+        n = hf.distribute([tray], 'cantoneira')
+        box = tray.definition.bounds
+        tol = 0.5.mm
+        inside = fastener_instances(tray).all? do |i|
+          b = i.bounds
+          b.min.x >= box.min.x - tol && b.min.y >= box.min.y - tol && b.min.z >= box.min.z - tol &&
+            b.max.x <= box.max.x + tol && b.max.y <= box.max.y + tol && b.max.z <= box.max.z + tol
+        end
+        check('cantoneiras na bandeja (M4)', n > 0 && n == expected && inside,
+              { 'desenhadas' => n, 'esperado' => expected, 'dentro_da_bandeja' => inside })
+      end
+
+      guard('relatório conta fixadores × quantidade da bandeja') do
         c = P::ReportGenerator.count_fasteners
-        check('distribuir cantoneiras e contar fixadores', c['Cantoneira F003'].to_i > 0, c)
+        n = fastener_instances(tray).size
+        check('relatório conta fixadores × quantidade da bandeja',
+              c['Cantoneira L25x25x2 c40'] == n * 2 && c['Rebite alumínio 4,8×12'] == n * 2 * 2, c)
+      end
+
+      guard('ancoragens na estrutura (M4)') do
+        hf = P::HardwareFasteners
+        tubes = JSON.parse(frame.get_attribute('CS_ACM360_DATA', 'tubes_json'))
+        vertical = tubes.select { |t| t['axis'] == 'z' }
+        expected = vertical.sum { |t| hf.positions(t['length_mm'].to_f, P::Settings.get('anchor_spacing_mm'), P::Settings.get('anchor_margin_mm')).size }
+        n = hf.distribute([frame], 'ancoragem')
+        back = vertical.map { |t| t['y_mm'].to_f + t['d_mm'].to_f }.max
+        max_y = fastener_instances(frame).map { |i| i.bounds.max.y.to_mm }.max.to_f
+        check('ancoragens na estrutura (M4)', n > 0 && n == expected && (max_y - back).abs < 0.5,
+              { 'desenhadas' => n, 'esperado' => expected, 'fundo_tubo' => back, 'fundo_fixador' => max_y })
+      end
+
+      guard('espera substitui ancoragem e afasta da parede') do
+        hf = P::HardwareFasteners
+        before = fastener_instances(frame).size
+        n = hf.distribute([frame], 'espera')
+        tubes = JSON.parse(frame.get_attribute('CS_ACM360_DATA', 'tubes_json'))
+        back = tubes.select { |t| t['axis'] == 'z' }.map { |t| t['y_mm'].to_f + t['d_mm'].to_f }.max
+        max_y = fastener_instances(frame).map { |i| i.bounds.max.y.to_mm }.max.to_f
+        types = fastener_instances(frame).map { |i| i.get_attribute('CS_ACM360_DATA', 'fastener_type') }.uniq
+        check('espera substitui ancoragem e afasta da parede',
+              n == before && types == ['espera'] && hf.applied_types(frame) == ['espera'] && (max_y - back - 100).abs < 0.5,
+              { 'tipos' => types, 'aplicados' => hf.applied_types(frame), 'afastamento' => max_y - back })
+      end
+
+      guard('fixadores acompanham a estrutura regerada') do
+        before = fastener_instances(frame).size
+        P::FrameKernel.regenerate_all_frames
+        frame = model.entities.grep(Sketchup::Group).find { |g| g.name == 'Gradil Teste' } || frame
+        after = frame.valid? ? fastener_instances(frame).size : -1
+        check('fixadores acompanham a estrutura regerada', before > 0 && after == before, { 'antes' => before, 'depois' => after })
+      end
+
+      guard('remover fixadores') do
+        P::HardwareFasteners.remove([frame])
+        check('remover fixadores', fastener_instances(frame).empty? && P::HardwareFasteners.applied_types(frame).empty?)
       end
 
       guard('fachada 3×2 com estrutura dentro de um grupo') do

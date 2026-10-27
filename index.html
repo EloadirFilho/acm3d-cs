@@ -538,15 +538,15 @@
             <div id="acmPanelBOMControls" class="acm360-form-scroll" hidden>
               <div class="acm-form-grid-2">
                 <div class="acm-field">
-                  <label for="selAcmFastenerType">TIPO DE FIXADOR</label>
+                  <label for="selAcmFastenerType">ESTRUTURA → PAREDE</label>
                   <select id="selAcmFastenerType">
-                    <option value="F003" selected>Cantoneira Fixador (F003)</option>
-                    <option value="F001">Ancoragem (F001)</option>
-                    <option value="F002">Espera Regulável (F002)</option>
+                    <option value="ancoragem" selected>Ancoragem (cantoneira na parede)</option>
+                    <option value="espera">Espera / Afastador</option>
+                    <option value="nenhum">Nenhuma (só cantoneiras das bandejas)</option>
                   </select>
                 </div>
                 <div class="acm-field">
-                  <label for="inpAcmFastenerSpacing">ESPAÇAMENTO FIXADORES (MM)</label>
+                  <label for="inpAcmFastenerSpacing">ESPAÇAMENTO CANTONEIRAS (MM)</label>
                   <input type="number" id="inpAcmFastenerSpacing" value="400" min="200" max="1000" step="50">
                 </div>
               </div>

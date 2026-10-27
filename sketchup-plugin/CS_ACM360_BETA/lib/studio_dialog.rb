@@ -88,8 +88,21 @@ module CS_ACM360_BETA
         UnfoldDxfEngine.export_erp_json_dialog
       end
 
-      dlg.add_action_callback('insert_fastener') do |_ctx, code|
-        AcmTrayKernel.insert_fastener_block(code.to_s)
+      # --- M4: Fixadores ---
+      dlg.add_action_callback('distribute_fasteners') do |_ctx, type|
+        begin
+          msg = HardwareFasteners.distribute_from_selection(type.to_s)
+          push_state_to_ui
+          dlg.execute_script("window.CSStudio && window.CSStudio.setStatus(#{JSON.generate(msg)});")
+        rescue StandardError => e
+          UI.messagebox("Erro ao distribuir fixadores: #{e.class}: #{e.message}")
+        end
+      end
+
+      dlg.add_action_callback('remove_fasteners') do |_ctx|
+        msg = HardwareFasteners.remove_from_selection
+        push_state_to_ui
+        dlg.execute_script("window.CSStudio && window.CSStudio.setStatus(#{JSON.generate(msg)});")
       end
 
       dlg.add_action_callback('set_color_mode') do |_ctx, mode|
@@ -126,10 +139,15 @@ module CS_ACM360_BETA
       dlg.add_action_callback('save_settings') do |_ctx, json_str|
         raw = JSON.parse(json_str.to_s) rescue nil
         if raw.is_a?(Hash)
-          before = Settings.all.values_at('bar_mm', 'kerf_mm')
-          after  = Settings.save(raw).values_at('bar_mm', 'kerf_mm')
-          n = before != after ? FrameKernel.regenerate_all_frames : 0
-          msg = n > 0 ? "Configurações salvas · #{n} estrutura(s) regerada(s) com a nova barra" : 'Configurações salvas'
+          fix_keys = %w[fastener_spacing_mm fastener_offset_mm anchor_spacing_mm anchor_margin_mm standoff_mm fastener_specs]
+          old_cfg = Settings.all
+          before, fix_before = old_cfg.values_at('bar_mm', 'kerf_mm'), old_cfg.values_at(*fix_keys)
+          new_cfg = Settings.save(raw)
+          n = before != new_cfg.values_at('bar_mm', 'kerf_mm') ? FrameKernel.regenerate_all_frames : 0
+          f = fix_before != new_cfg.values_at(*fix_keys) ? HardwareFasteners.redraw_all : 0
+          msg = 'Configurações salvas'
+          msg += " · #{n} estrutura(s) regerada(s) com a nova barra" if n > 0
+          msg += " · #{f} fixador(es) redesenhado(s)" if f > 0
           push_state_to_ui
           dlg.execute_script("window.CSStudio && window.CSStudio.setStatus(#{JSON.generate(msg)});")
         end

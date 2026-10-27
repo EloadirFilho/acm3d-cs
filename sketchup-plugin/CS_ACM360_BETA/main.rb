@@ -51,15 +51,19 @@ module CS_ACM360_BETA
 
     # Submenu Fixadores 3D & Colagem
     sub_fix = ext_menu.add_submenu('Fixadores 3D & Colagem VHB')
-    sub_fix.add_item('Distribuir Cantoneiras (F003) na Seleção…') do
-      sel = Sketchup.active_model.selection.grep(Sketchup::Group).select { |g| g.get_attribute(Catalog::ATTR_DICT, 'kind') == 'acm_tray' }
-      if sel.empty?
-        UI.messagebox('Selecione pelo menos uma Bandeja ACM para distribuir cantoneiras.')
-      else
-        sel.each { |t| HardwareFasteners.distribute_fasteners_on_tray(t) }
-        UI.messagebox("Cantoneiras distribuídas com sucesso em #{sel.size} bandeja(s)!")
-      end
+    sub_fix.add_item('Distribuir Cantoneiras (Bandeja → Estrutura)') do
+      UI.messagebox(HardwareFasteners.distribute_from_selection('cantoneira'))
     end
+    sub_fix.add_item('Distribuir Ancoragens (Estrutura → Parede)') do
+      UI.messagebox(HardwareFasteners.distribute_from_selection('ancoragem'))
+    end
+    sub_fix.add_item('Distribuir Esperas / Afastadores') do
+      UI.messagebox(HardwareFasteners.distribute_from_selection('espera'))
+    end
+    sub_fix.add_item('Remover Fixadores da Seleção') do
+      UI.messagebox(HardwareFasteners.remove_from_selection)
+    end
+    sub_fix.add_separator
     sub_fix.add_item('Calcular Fita 3M VHB & Promotor de Adesão…') do
       vhb = HardwareFasteners.calculate_vhb_tape_requirements
       UI.messagebox(
@@ -72,10 +76,6 @@ module CS_ACM360_BETA
         "Promotor Primer 3M AP111 / 94: #{vhb[:primer_cans]} frasco(s) (250ml)"
       )
     end
-    sub_fix.add_separator
-    sub_fix.add_item('Inserir Ancoragem (F001)')          { AcmTrayKernel.insert_fastener_block('F001') }
-    sub_fix.add_item('Inserir Espera (F002)')             { AcmTrayKernel.insert_fastener_block('F002') }
-    sub_fix.add_item('Inserir Cantoneira Fixador (F003)') { AcmTrayKernel.insert_fastener_block('F003') }
 
     ext_menu.add_separator
     ext_menu.add_item('Relatório Estrutural & Plano de Barras 1D…') { StudioDialog.show('report') }
@@ -139,9 +139,13 @@ module CS_ACM360_BETA
       if kind == 'parametric_frame'
         sub.add_item('Editar Estrutura no Painel…') { StudioDialog.show('frame') }
         sub.add_item('Ver Relatório e Emendas de Barra…') { StudioDialog.show('report') }
+        sub.add_item('Distribuir Ancoragens (Parede)') { UI.messagebox(HardwareFasteners.distribute_from_selection('ancoragem')) }
+        sub.add_item('Distribuir Esperas / Afastadores') { UI.messagebox(HardwareFasteners.distribute_from_selection('espera')) }
+        sub.add_item('Remover Fixadores') { UI.messagebox(HardwareFasteners.remove_from_selection) }
       elsif kind == 'acm_tray'
         sub.add_item('Planificar Bandeja no 3D') { UnfoldDxfEngine.place_unfolded_tray_in_model(first) }
-        sub.add_item('Distribuir Cantoneiras (F003)') { HardwareFasteners.distribute_fasteners_on_tray(first) }
+        sub.add_item('Distribuir Cantoneiras') { UI.messagebox(HardwareFasteners.distribute_from_selection('cantoneira')) }
+        sub.add_item('Remover Fixadores') { UI.messagebox(HardwareFasteners.remove_from_selection) }
         sub.add_item('Criar Estrutura Metálica desta(s) Bandeja(s)') { AcmTrayKernel.create_frame_from_trays }
         sub.add_item('Exportar DXF CNC…') { UnfoldDxfEngine.export_model_trays_to_dxf }
       end

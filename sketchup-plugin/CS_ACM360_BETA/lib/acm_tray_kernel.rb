@@ -3,7 +3,7 @@
 # CS_ACM360_BETA::AcmTrayKernel
 # Construtor e Editor de Bandejas de ACM 3D (retornos, abas, refile, cantos 45°),
 # Leitura Automática de Bandejas ACM -> Geração de Estrutura Metálica (ler_acm),
-# Colagem (Fita Dupla-Face e Tiras de Reforço) e Inserção de Fixadores 3D (.skp).
+# Colagem (Fita Dupla-Face e Tiras de Reforço). Fixadores: hardware_fasteners.rb (M4).
 # ==============================================================================
 
 require 'json'
@@ -47,6 +47,7 @@ module CS_ACM360_BETA
         grp.set_attribute(Catalog::ATTR_DICT, 'version', CS_ACM360_BETA::PLUGIN_VERSION)
         grp.set_attribute(Catalog::ATTR_DICT, 'tray_json', JSON.generate(cfg))
         grp.set_attribute(Catalog::ATTR_DICT, 'unfold_json', JSON.generate(flat_data))
+        HardwareFasteners.reapply(grp)
 
         model.commit_operation
         model.selection.clear
@@ -233,41 +234,6 @@ module CS_ACM360_BETA
       rescue StandardError => e
         model.abort_operation if own_operation
         raise e
-      end
-    end
-
-    # Insere um Fixador 3D (.skp da pasta BLOCOS: Ancoragem_F001, Espera_F002, Cantoneira_Fixador_F003)
-    def self.insert_fastener_block(block_code = 'F003')
-      model = Sketchup.active_model
-      return nil unless model
-
-      filename = case block_code.to_s.upcase
-                 when 'F001' then 'Ancoragem_F001.skp'
-                 when 'F002' then 'Espera_F002.skp'
-                 else             'Cantoneira_Fixador_F003.skp'
-                 end
-
-      skp_path = File.join(CS_ACM360_BETA::PLUGIN_DIR, 'BLOCOS', filename)
-      unless File.exist?(skp_path)
-        UI.messagebox("Bloco 3D não encontrado: #{skp_path}")
-        return nil
-      end
-
-      model.start_operation("Inserir Fixador #{filename}", true)
-      begin
-        defn = model.definitions.load(skp_path)
-        inst = model.active_entities.add_instance(defn, Geom::Transformation.new)
-        FrameKernel.ensure_layer(model, 'CS_ACM360_Fixadores', inst)
-        inst.set_attribute(Catalog::ATTR_DICT, 'kind', 'fastener')
-        inst.set_attribute(Catalog::ATTR_DICT, 'fastener_code', block_code.to_s.upcase)
-        model.commit_operation
-        model.selection.clear
-        model.selection.add(inst)
-        inst
-      rescue StandardError => e
-        model.abort_operation
-        UI.messagebox("Erro ao inserir fixador: #{e.message}")
-        nil
       end
     end
 

@@ -12,7 +12,7 @@ require 'extensions.rb'
 module CS_ACM360_BETA
   PLUGIN_ID          = 'CS_ACM360_BETA'.freeze
   PLUGIN_NAME        = 'CS ACM360 BETA · Estruturas & Bandejas ACM'.freeze
-  PLUGIN_VERSION     = '1.2.2-beta'.freeze
+  PLUGIN_VERSION     = '1.3.0-beta'.freeze
   PLUGIN_DESCRIPTION = 'Estruturas metálicas (Gradil/Metalon/Alumínio), Bandejas de ACM, Leitura Automática ACM → Estrutura, Planificação 2D/3D, Exportação DXF CNC e Publicação para o CS Fachadas ERP.'.freeze
   PLUGIN_AUTHOR      = 'CS Comunicação / CS Fachadas ERP'.freeze
   PLUGIN_COPYRIGHT   = '© 2026 CS Comunicação'.freeze

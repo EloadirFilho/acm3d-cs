@@ -5,9 +5,11 @@
 #
 # Com -Original CS_ACM360_v1.0.2.rbz testa o pacote do original corrigido (junto com o
 # BETA instalado, o que tambem confere que os dois convivem) e depois o remove.
+# Com -Script outro.rb roda outro script de tests/sketchup no lugar de run_tests.rb.
 param(
   [int]$TimeoutSec = 180,
-  [string]$Original = ''
+  [string]$Original = '',
+  [string]$Script = 'run_tests.rb'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -71,7 +73,7 @@ if ($Original) {
     Remove-Item -Recurse -Force (Join-Path $plugins 'CS_ACM360')
   }
 } else {
-  Invoke-SketchUp (Join-Path $root 'tests\sketchup\run_tests.rb') $model $results
+  Invoke-SketchUp (Join-Path $root "tests\sketchup\$Script") $model $results
 }
 
 if (-not (Test-Path $results)) {

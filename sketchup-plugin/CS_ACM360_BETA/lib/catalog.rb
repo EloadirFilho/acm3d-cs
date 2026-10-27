@@ -88,9 +88,24 @@ module CS_ACM360_BETA
         { 'id' => 'generico_3', 'name' => 'Genérico 3 mm', 'thickness_mm' => 3.0, 'bend_factor_mm' => 1.5 },
         { 'id' => 'generico_4', 'name' => 'Genérico 4 mm', 'thickness_mm' => 4.0, 'bend_factor_mm' => 2.0 }
       ],
-      # Fixadores
+      # Fixadores (M4): cantoneira bandeja → estrutura usa spacing/offset; ancoragem e espera
+      # (estrutura → parede) usam anchor_*; standoff_mm é o afastamento da espera até a parede
       'fastener_spacing_mm' => 400.0,
       'fastener_offset_mm'  => 70.0,
+      'anchor_spacing_mm'   => 800.0,
+      'anchor_margin_mm'    => 150.0,
+      'standoff_mm'         => 100.0,
+      'fastener_specs'      => [
+        { 'id' => 'cantoneira', 'name' => 'Cantoneira bandeja → estrutura',
+          'leg_a_mm' => 25.0, 'leg_b_mm' => 25.0, 'length_mm' => 40.0, 'thickness_mm' => 2.0,
+          'items' => [{ 'name' => 'Rebite alumínio 4,8×12', 'qty' => 2 }, { 'name' => 'Parafuso autobrocante 4,2×19', 'qty' => 2 }] },
+        { 'id' => 'ancoragem', 'name' => 'Ancoragem estrutura → parede',
+          'leg_a_mm' => 50.0, 'leg_b_mm' => 50.0, 'length_mm' => 50.0, 'thickness_mm' => 3.0,
+          'items' => [{ 'name' => 'Parafuso autobrocante 4,2×19', 'qty' => 2 }, { 'name' => 'Bucha S8', 'qty' => 2 }, { 'name' => 'Parafuso 5,5×50', 'qty' => 2 }] },
+        { 'id' => 'espera', 'name' => 'Espera (afastador)',
+          'leg_a_mm' => 40.0, 'leg_b_mm' => 50.0, 'length_mm' => 50.0, 'thickness_mm' => 3.0,
+          'items' => [{ 'name' => 'Parafuso autobrocante 4,2×19', 'qty' => 2 }, { 'name' => 'Bucha S8', 'qty' => 2 }, { 'name' => 'Parafuso 5,5×50', 'qty' => 2 }] }
+      ],
       # Fitas dupla face
       'tape'                => 'vhb_4910',
       'tapes'               => [

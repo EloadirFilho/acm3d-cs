@@ -1982,7 +1982,12 @@ function readAcmStudioInputs() {
     fresa: document.getElementById('selAcmFresa')?.value || 'V90',
     cornerTrat: document.getElementById('selAcmCornerTrat')?.value || 'esquadria',
     syncJuntas: Boolean(document.getElementById('chkAcmSyncJuntas')?.checked),
-    fastenerType: document.getElementById('selAcmFastenerType')?.value || 'F003',
+    // Fixação da estrutura na parede (M4): ancoragem, espera (afastador) ou nenhuma
+    wallFastener: (() => {
+      const v = document.getElementById('selAcmFastenerType')?.value;
+      if (v === 'nenhum') return '';
+      return ['ancoragem', 'espera'].includes(v) ? v : 'ancoragem'; // valores antigos (F001..F003) caem na ancoragem
+    })(),
     fastenerSpacing: Math.max(100, Number(document.getElementById('inpAcmFastenerSpacing')?.value || acmSettings.fastener_spacing_mm)),
     vhbType: document.getElementById('selAcmVhbType')?.value || acmSettings.tape,
     sealant: document.getElementById('selAcmSealant')?.value || 'PU40_CINZA'
@@ -2193,9 +2198,23 @@ function computeAcmStudioModel(cfg) {
   const vhbRolls = Math.max(1, Math.ceil(totalTapeM / tape.roll_m));
   const primerCans = Math.max(1, Math.ceil(totalTapeM / 100));
 
-  const cantoneirasPerTray = Math.max(4, Math.floor((2 * (trayW + trayH)) / (cfg.fastenerSpacing || 400)));
-  const totalCantoneiras = cantoneirasPerTray * totalTrays;
-  const totalScrews = (totalCantoneiras * 2) + (totalBarsCount * 4);
+  // Fixadores pela mesma regra do plugin (acm360-report.js · estimateFasteners)
+  const edge = { type: cfg.edgeType, return_mm: cfg.returnMm };
+  const fastenerSettings = { ...acmSettings, fastener_spacing_mm: cfg.fastenerSpacing };
+  const trayFix = AcmReport.estimateFasteners({
+    trays: [{ w_mm: trayW, h_mm: trayH, quantity: 1, edges: { inf: edge, sup: edge, esq: edge, dir: edge } }]
+  }, fastenerSettings);
+  const fasteners = AcmReport.estimateFasteners({
+    trays: [{ w_mm: trayW, h_mm: trayH, quantity: totalTrays, edges: { inf: edge, sup: edge, esq: edge, dir: edge } }],
+    tubes: tubes.map((tb) => ({ axis: tb.axis, length_mm: tb.len, d_mm: tb.profile === profF ? fd : td })),
+    wall: cfg.wallFastener
+  }, fastenerSettings);
+  const cantoneirasPerTray = trayFix.cantoneiras;
+  const totalCantoneiras = fasteners.cantoneiras;
+  const totalAnchors = fasteners.anchors;
+  const totalScrews = Object.entries(fasteners.items)
+    .filter(([name]) => /autobrocante/i.test(name))
+    .reduce((acc, [, qty]) => acc + qty, 0);
   const totalSealantTubes = Math.max(1, Math.ceil(((cfg.cols * (cfg.rows - 1) + cfg.rows * (cfg.cols - 1)) * 1.5) / 10));
 
   const bom = {
@@ -2206,6 +2225,9 @@ function computeAcmStudioModel(cfg) {
     primerCans,
     cantoneirasPerTray,
     totalCantoneiras,
+    totalAnchors,
+    fastenerPieces: fasteners.pieces,
+    fastenerItems: fasteners.items,
     totalScrews,
     totalSealantTubes
   };
@@ -2298,8 +2320,8 @@ function renderAcm360Studio() {
       rowsHtml.push(`
         <tr>
           <th>Ferragens &amp; Fixadores</th>
-          <td>Cantoneiras (${cfg.fastenerType || 'F003'}) + Parafusos 4.2x19</td>
-          <td>${model.bom.totalCantoneiras} cantoneiras · ${model.bom.totalScrews} parafusos</td>
+          <td>Cantoneiras bandeja → estrutura${cfg.wallFastener ? ' + ' + (cfg.wallFastener === 'espera' ? 'esperas' : 'ancoragens') + ' na parede' : ''}</td>
+          <td>${model.bom.totalCantoneiras} cantoneiras · ${model.bom.totalAnchors} ${cfg.wallFastener === 'espera' ? 'esperas' : 'ancoragens'} · ${model.bom.totalScrews} autobrocantes</td>
           <td><strong>Colagem: ${model.bom.vhbRolls} rolos ${escAcm(model.bom.tapeName)} (${model.bom.vhbTapeM}m)</strong></td>
         </tr>
       `);
@@ -2324,12 +2346,12 @@ function renderAcm360Studio() {
           <div style="font-size:0.7rem; color:#64748B;">(250 ml p/ adesão)</div>
         </div>
         <div style="background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:6px; border:1px solid #444;">
-          <div style="font-size:0.72rem; color:#94A3B8; font-weight:700;">CANTONEIRAS F003</div>
+          <div style="font-size:0.72rem; color:#94A3B8; font-weight:700;">CANTONEIRAS</div>
           <strong style="color:#34D399; font-size:1.05rem;">${b.totalCantoneiras} un</strong>
           <div style="font-size:0.7rem; color:#64748B;">(${b.cantoneirasPerTray} un / bandeja)</div>
         </div>
         <div style="background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:6px; border:1px solid #444;">
-          <div style="font-size:0.72rem; color:#94A3B8; font-weight:700;">PARAFUSOS 4.2x19</div>
+          <div style="font-size:0.72rem; color:#94A3B8; font-weight:700;">AUTOBROCANTES</div>
           <strong style="color:#F87171; font-size:1.05rem;">${b.totalScrews} un</strong>
           <div style="font-size:0.7rem; color:#64748B;">(Autobrocante vedação)</div>
         </div>
@@ -2618,8 +2640,8 @@ function buildAcm360Report() {
       front_w_mm: m.trayW, front_h_mm: m.trayH, flat_w_mm: m.flatW, flat_h_mm: m.flatH, thickness_mm: m.preset.thickness_mm
     }],
     fasteners: {
-      [`Cantoneira ${m.cfg.fastenerType || 'F003'}`]: m.bom.totalCantoneiras,
-      'Parafusos autobrocantes 4.2 x 19 mm': m.bom.totalScrews,
+      ...m.bom.fastenerPieces,
+      ...m.bom.fastenerItems,
       'Selante PU40 (cartucho 400 g)': m.bom.totalSealantTubes
     }
   }, acmSettings, profiles);
@@ -2677,7 +2699,7 @@ function createErpOsFromAcm360() {
     elapsedSeconds: 0,
     isPaused: false,
     pauseReason: '',
-    obs: `Gerado pelo ACM360 Studio: ${m.totalTrays} bandejas planificadas (${m.flatW}×${m.flatH}mm, fresa ${m.cfg.fresa}) + ${m.tubes.length} tubos (${m.totalBarsCount} barras de ${m.barMm}mm, corte ${m.cfg.cornerType}). Fixadores: ${m.bom.totalCantoneiras} cantoneiras, ${m.bom.vhbRolls} rolos ${m.bom.tapeName}.`,
+    obs: `Gerado pelo ACM360 Studio: ${m.totalTrays} bandejas planificadas (${m.flatW}×${m.flatH}mm, fresa ${m.cfg.fresa}) + ${m.tubes.length} tubos (${m.totalBarsCount} barras de ${m.barMm}mm, corte ${m.cfg.cornerType}). Fixadores: ${m.bom.totalCantoneiras} cantoneiras, ${m.bom.totalAnchors} ${m.cfg.wallFastener === 'espera' ? 'esperas' : 'ancoragens'}, ${m.bom.vhbRolls} rolos ${m.bom.tapeName}.`,
     croquiType: 'fachada',
     stages: [
       { name: 'Criação/Projetos', status: 'done', by: 'ACM360 Studio', duration: 'Automático' },
@@ -2690,8 +2712,9 @@ function createErpOsFromAcm360() {
       { matId: 'mat-metalon-20', name: `${profFrame.name} (${m.totalBarsCount} barras de ${m.barMm}mm)`, predicted: m.totalLinearM, used: 0, unit: 'ml' },
       { matId: 'mat-adesivo-avery', name: `Chapas ACM ${m.preset.thickness_mm}mm Planificadas (${m.totalTrays} pçs)`, predicted: m.totalAcmAreaM2, used: 0, unit: 'm²' },
       { matId: 'mat-vhb-tape', name: `${m.bom.tapeName} (${m.bom.vhbRolls} rolos de ${m.bom.tapeRollM}m)`, predicted: m.bom.vhbTapeM, used: 0, unit: 'ml' },
-      { matId: 'mat-cantoneiras', name: `Cantoneiras Fixador (${m.cfg.fastenerType || 'F003'})`, predicted: m.bom.totalCantoneiras, used: 0, unit: 'un' },
-      { matId: 'mat-screws', name: `Parafusos Autobrocantes 4.2x19`, predicted: m.bom.totalScrews, used: 0, unit: 'un' }
+      ...Object.entries({ ...m.bom.fastenerPieces, ...m.bom.fastenerItems }).map(([name, qty], i) => ({
+        matId: `mat-fix-${i + 1}`, name, predicted: qty, used: 0, unit: 'un'
+      }))
     ]
   };
   OS_LIST.unshift(newOs);

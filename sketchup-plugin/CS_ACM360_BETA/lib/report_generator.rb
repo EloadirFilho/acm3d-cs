@@ -10,17 +10,20 @@ module CS_ACM360_BETA
   module ReportGenerator
     extend self
 
-    FASTENER_NAMES = [
+    # Blocos antigos (pasta BLOCOS, inseridos à mão em modelos de versões anteriores)
+    LEGACY_FASTENER_NAMES = [
       ['Cantoneira F003', %w[Cantoneira F003]],
       ['Ancoragem F001',  %w[Ancoragem F001]],
       ['Espera F002',     %w[Espera F002]]
     ].freeze
 
-    # Conta os blocos de fixadores em todo o modelo (inclusive dentro de grupos)
+    # Conta os fixadores em todo o modelo (inclusive dentro de grupos): cada peça
+    # pela medida e, somados, os parafusos/buchas/rebites que ela consome (M4).
     def count_fasteners(model = Sketchup.active_model)
-      counter = Hash.new(0)
-      walk_fasteners(model.entities, counter) if model
-      counter
+      pieces = Hash.new(0)
+      items  = Hash.new(0)
+      walk_fasteners(model.entities, pieces, items) if model
+      pieces.merge(items)
     end
 
     # Salva um arquivo gerado pela tela (CSV em texto, XLSX em base64)
@@ -48,14 +51,26 @@ module CS_ACM360_BETA
       UI.openURL('file:///' + File.expand_path(path).tr('\\', '/'))
     end
 
-    def walk_fasteners(entities, counter)
+    # mult: bandeja com quantidade N é um grupo só no 3D, mas leva N vezes os fixadores
+    def walk_fasteners(entities, pieces, items, mult = 1)
       entities.each do |e|
         if e.is_a?(Sketchup::Group)
-          walk_fasteners(e.entities, counter)
+          m = mult
+          if e.get_attribute(Catalog::ATTR_DICT, 'kind') == 'acm_tray'
+            m *= [HardwareFasteners.tray_cfg(e)['quantity'].to_i, 1].max
+          end
+          walk_fasteners(e.entities, pieces, items, m)
         elsif e.is_a?(Sketchup::ComponentInstance)
-          cname = e.definition.name
-          label = FASTENER_NAMES.find { |_, keys| keys.any? { |k| cname.include?(k) } }
-          counter[label[0]] += 1 if label
+          label = e.get_attribute(Catalog::ATTR_DICT, 'fastener_label')
+          if label && e.get_attribute(Catalog::ATTR_DICT, 'kind') == 'fastener'
+            pieces[label.to_s] += mult
+            list = JSON.parse(e.get_attribute(Catalog::ATTR_DICT, 'consumption_json').to_s) rescue []
+            Array(list).each { |i| items[i['name'].to_s] += i['qty'].to_i * mult if i.is_a?(Hash) }
+          else
+            cname = e.definition.name
+            legacy = LEGACY_FASTENER_NAMES.find { |_, keys| keys.any? { |k| cname.include?(k) } }
+            pieces[legacy[0]] += 1 if legacy
+          end
         end
       end
     end

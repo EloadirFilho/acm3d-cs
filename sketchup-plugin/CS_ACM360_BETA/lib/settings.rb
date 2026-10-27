@@ -30,7 +30,17 @@ module CS_ACM360_BETA
       'nest_gap_mm'         => [0.0, 100.0],
       'nest_margin_mm'      => [0.0, 200.0],
       'fastener_spacing_mm' => [100.0, 2000.0],
-      'fastener_offset_mm'  => [0.0, 500.0]
+      'fastener_offset_mm'  => [0.0, 500.0],
+      'anchor_spacing_mm'   => [100.0, 3000.0],
+      'anchor_margin_mm'    => [0.0, 1000.0],
+      'standoff_mm'         => [10.0, 500.0]
+    }.freeze
+
+    FASTENER_RANGES = {
+      'leg_a_mm'     => [10.0, 200.0],
+      'leg_b_mm'     => [10.0, 200.0],
+      'length_mm'    => [10.0, 300.0],
+      'thickness_mm' => [0.5, 10.0]
     }.freeze
 
     @cache = nil
@@ -178,6 +188,8 @@ module CS_ACM360_BETA
       out['acm_preset'] = out['acm_presets'].first['id'] unless out['acm_presets'].any? { |p| p['id'] == out['acm_preset'] }
       out['tape']       = out['tapes'].first['id']       unless out['tapes'].any? { |t| t['id'] == out['tape'] }
 
+      out['fastener_specs'] = normalize_fastener_specs(out['fastener_specs'], defaults['fastener_specs'])
+
       out['custom_profiles'] = Array(out['custom_profiles']).select { |p| p.is_a?(Hash) && p['id'].to_i >= 100 && p['w_mm'].to_f > 0 && p['h_mm'].to_f > 0 }
       out['profile_prices']  = (out['profile_prices'].is_a?(Hash) ? out['profile_prices'] : {})
                                .transform_keys(&:to_s).transform_values { |v| [v.to_f, 0.0].max }
@@ -185,6 +197,27 @@ module CS_ACM360_BETA
       %w[company_name company_phone company_email company_logo].each { |k| out[k] = out[k].to_s }
       out['company_logo'] = '' if out['company_logo'].bytesize > LOGO_MAX_BYTES * 4 / 3 + 64 # base64 de 300 KB
       out
+    end
+
+    # Os três tipos de fixador são fixos (cantoneira, ancoragem, espera); só as medidas e o consumo mudam
+    def self.normalize_fastener_specs(list, fallback)
+      given = Array(list).select { |s| s.is_a?(Hash) }
+      fallback.map do |base|
+        s = given.find { |g| g['id'].to_s == base['id'] } || {}
+        spec = { 'id' => base['id'], 'name' => (s['name'].to_s.strip.empty? ? base['name'] : s['name'].to_s) }
+        FASTENER_RANGES.each do |k, (lo, hi)|
+          v = Float(s[k]) rescue base[k]
+          spec[k] = v.to_f.clamp(lo, hi)
+        end
+        items = s.key?('items') ? Array(s['items']) : base['items']
+        spec['items'] = items.select { |i| i.is_a?(Hash) && !i['name'].to_s.strip.empty? }
+                             .map { |i| { 'name' => i['name'].to_s.strip, 'qty' => i['qty'].to_i.clamp(0, 100) } }
+        spec
+      end
+    end
+
+    def self.fastener_spec(id)
+      get('fastener_specs').find { |s| s['id'] == id.to_s }
     end
 
     # Mantém só itens válidos (com id e nome); lista vazia volta ao padrão

@@ -288,6 +288,73 @@
   // ---------------------------------------------------------------------------
   // Tabelas (usadas pelo CSV, XLSX e impressão)
   // ---------------------------------------------------------------------------
+  // ---------------- M4: Fixadores ----------------
+  // Posições ao longo de um comprimento: margem nas pontas e passo <= espaçamento.
+  // Mesma regra de HardwareFasteners.positions no plugin.
+  function fastenerPositions(len, spacing, margin) {
+    len = num(len); spacing = Math.max(num(spacing), 1); margin = num(margin);
+    if (len <= 0) return [];
+    var usable = len - 2 * margin;
+    if (usable <= 0) return [len / 2];
+    var n = Math.max(Math.floor(usable / spacing) + 1, 2);
+    var step = usable / (n - 1);
+    var out = [];
+    for (var i = 0; i < n; i++) out.push(margin + i * step);
+    return out;
+  }
+
+  function findSpec(settings, id) {
+    return ((settings && settings.fastener_specs) || []).filter(function(s) { return s.id === id; })[0];
+  }
+
+  // Mesmo nome das definições desenhadas no plugin (sem o prefixo "CS ")
+  function fastenerLabel(spec, legA) {
+    return spec.name.split(' ')[0] + ' L' + round(legA, 1) + 'x' + round(spec.leg_b_mm, 1) + 'x' +
+      spec.thickness_mm + ' c' + spec.length_mm;
+  }
+
+  // input.trays: [{ w_mm, h_mm, quantity, edges: { inf|sup|esq|dir: { type, return_mm } } }]
+  // input.tubes: [{ axis: 'z'|'x', length_mm, d_mm, quantity }]; input.wall: 'ancoragem' | 'espera' | ''
+  // Retorna peças por medida e itens de consumo somados, como ReportGenerator.count_fasteners.
+  function estimateFasteners(input, settings) {
+    var pieces = {}, items = {}, cantoneiras = 0, anchors = 0;
+    var add = function(spec, label, n) {
+      if (n <= 0) return;
+      pieces[label] = (pieces[label] || 0) + n;
+      (spec.items || []).forEach(function(it) { items[it.name] = (items[it.name] || 0) + it.qty * n; });
+    };
+    var cant = findSpec(settings, 'cantoneira');
+    if (cant) {
+      (input.trays || []).forEach(function(t) {
+        var per = 0, edges = t.edges || {};
+        ['inf', 'sup', 'esq', 'dir'].forEach(function(side) {
+          var e = edges[side] || {};
+          if ((e.type === 'dobra' || e.type === 'dobra_aba') && num(e.return_mm) > cant.thickness_mm) {
+            var along = side === 'inf' || side === 'sup' ? t.w_mm : t.h_mm;
+            per += fastenerPositions(along, settings.fastener_spacing_mm, settings.fastener_offset_mm).length;
+          }
+        });
+        var n = per * Math.max(num(t.quantity, 1), 1);
+        cantoneiras += n;
+        add(cant, fastenerLabel(cant, cant.leg_a_mm), n);
+      });
+    }
+    var wallSpec = input.wall ? findSpec(settings, input.wall) : null;
+    if (wallSpec) {
+      var standoff = input.wall === 'espera' ? num(settings.standoff_mm) : 0;
+      var tubes = input.tubes || [];
+      var vertical = tubes.filter(function(t) { return t.axis === 'z'; });
+      (vertical.length ? vertical : tubes).forEach(function(t) {
+        var n = fastenerPositions(t.length_mm, settings.anchor_spacing_mm, settings.anchor_margin_mm).length *
+          Math.max(num(t.quantity, 1), 1);
+        anchors += n;
+        // a aba no tubo não passa da profundidade dele (senão bate na bandeja)
+        add(wallSpec, fastenerLabel(wallSpec, Math.min(wallSpec.leg_a_mm, num(t.d_mm, wallSpec.leg_a_mm)) + standoff), n);
+      });
+    }
+    return { pieces: pieces, items: items, cantoneiras: cantoneiras, anchors: anchors };
+  }
+
   function reportSheets(r) {
     var resumo = [
       ['Projeto', r.project_name], ['Emissão', r.date],
@@ -511,7 +578,9 @@
     reportToCsv: reportToCsv,
     reportToXlsx: reportToXlsx,
     reportToHtml: reportToHtml,
-    bytesToBase64: bytesToBase64
+    bytesToBase64: bytesToBase64,
+    fastenerPositions: fastenerPositions,
+    estimateFasteners: estimateFasteners
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AcmReport = api;

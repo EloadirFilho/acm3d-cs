@@ -29,8 +29,21 @@ const ACM360_DEFAULT_SETTINGS = {
     { id: 'generico_3', name: 'Genérico 3 mm', thickness_mm: 3, bend_factor_mm: 1.5 },
     { id: 'generico_4', name: 'Genérico 4 mm', thickness_mm: 4, bend_factor_mm: 2 }
   ],
+  // Fixadores (M4): cantoneira bandeja → estrutura usa spacing/offset; ancoragem e espera
+  // (estrutura → parede) usam anchor_*; standoff_mm é o afastamento da espera até a parede
   fastener_spacing_mm: 400,
   fastener_offset_mm: 70,
+  anchor_spacing_mm: 800,
+  anchor_margin_mm: 150,
+  standoff_mm: 100,
+  fastener_specs: [
+    { id: 'cantoneira', name: 'Cantoneira bandeja → estrutura', leg_a_mm: 25, leg_b_mm: 25, length_mm: 40, thickness_mm: 2,
+      items: [{ name: 'Rebite alumínio 4,8×12', qty: 2 }, { name: 'Parafuso autobrocante 4,2×19', qty: 2 }] },
+    { id: 'ancoragem', name: 'Ancoragem estrutura → parede', leg_a_mm: 50, leg_b_mm: 50, length_mm: 50, thickness_mm: 3,
+      items: [{ name: 'Parafuso autobrocante 4,2×19', qty: 2 }, { name: 'Bucha S8', qty: 2 }, { name: 'Parafuso 5,5×50', qty: 2 }] },
+    { id: 'espera', name: 'Espera (afastador)', leg_a_mm: 40, leg_b_mm: 50, length_mm: 50, thickness_mm: 3,
+      items: [{ name: 'Parafuso autobrocante 4,2×19', qty: 2 }, { name: 'Bucha S8', qty: 2 }, { name: 'Parafuso 5,5×50', qty: 2 }] }
+  ],
   tape: 'vhb_4910',
   tapes: [
     { id: 'vhb_4910', name: '3M VHB 4910 (1,1 mm)', width_mm: 19, roll_m: 33, price: 0 },
@@ -57,7 +70,17 @@ const ACM360_NUMERIC_RANGES = {
   nest_gap_mm: [0, 100],
   nest_margin_mm: [0, 200],
   fastener_spacing_mm: [100, 2000],
-  fastener_offset_mm: [0, 500]
+  fastener_offset_mm: [0, 500],
+  anchor_spacing_mm: [100, 3000],
+  anchor_margin_mm: [0, 1000],
+  standoff_mm: [10, 500]
+};
+
+const ACM360_FASTENER_RANGES = {
+  leg_a_mm: [10, 200],
+  leg_b_mm: [10, 200],
+  length_mm: [10, 300],
+  thickness_mm: [0.5, 10]
 };
 
 const clampNum = (v, lo, hi, fallback) => {
@@ -66,6 +89,23 @@ const clampNum = (v, lo, hi, fallback) => {
 };
 
 const cloneJson = (obj) => JSON.parse(JSON.stringify(obj));
+
+// Os três tipos de fixador são fixos (cantoneira, ancoragem, espera); só as medidas e o consumo mudam
+function normalizeFastenerSpecs(list, fallback) {
+  const given = (Array.isArray(list) ? list : []).filter((s) => s && typeof s === 'object');
+  return fallback.map((base) => {
+    const s = given.find((g) => String(g.id) === base.id) || {};
+    const spec = { id: base.id, name: String(s.name || '').trim() ? String(s.name) : base.name };
+    Object.entries(ACM360_FASTENER_RANGES).forEach(([k, [lo, hi]]) => {
+      spec[k] = clampNum(s[k], lo, hi, base[k]);
+    });
+    const items = s.items !== undefined ? (Array.isArray(s.items) ? s.items : []) : base.items;
+    spec.items = items
+      .filter((i) => i && String(i.name || '').trim())
+      .map((i) => ({ name: String(i.name).trim(), qty: Math.min(100, Math.max(0, Math.trunc(Number(i.qty) || 0))) }));
+    return spec;
+  });
+}
 
 function normalizeAcmSettings(raw) {
   const src = raw && typeof raw === 'object' ? raw : {};
@@ -100,6 +140,7 @@ function normalizeAcmSettings(raw) {
     roll_m: clampNum(t.roll_m, 1, 500, 33),
     price: Math.max(0, Number(t.price) || 0)
   }));
+  out.fastener_specs = normalizeFastenerSpecs(out.fastener_specs, def.fastener_specs);
   if (!out.acm_presets.some((p) => p.id === out.acm_preset)) out.acm_preset = out.acm_presets[0].id;
   if (!out.tapes.some((t) => t.id === out.tape)) out.tape = out.tapes[0].id;
 

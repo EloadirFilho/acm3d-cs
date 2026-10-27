@@ -222,6 +222,15 @@ flowchart TD
 - "Perímetro, 3 por lado" em um quadro gera 12 fixadores (ou 8 + cantos, conforme opção) nas posições certas.
 - O relatório soma parafusos e buchas por tamanho.
 
+**Status (27/10/2026): entregue no BETA 1.3.0** (falta só a colocação por clique, que vem com o M1)
+- Três tipos, desenhados pelo plugin como cantoneira em L (sem os blocos de terceiros): **cantoneira** bandeja → estrutura (no fundo de cada retorno com dobra), **ancoragem** estrutura → parede e **espera/afastador** (nos tubos verticais; sem verticais, nos horizontais). Ancoragem e espera não convivem no mesmo grupo.
+- Distribuição por distância: margem nas pontas e passo nunca maior que o espaçamento, no mínimo 2 por trecho (`HardwareFasteners.positions` = `fastenerPositions` em `acm360-report.js`).
+- Configurações (M12): espaçamento/recuo das cantoneiras, espaçamento/recuo das ancoragens, afastamento da espera, medidas de cada L (abas, comprimento, espessura) e consumo por peça. Salvar redesenha os fixadores do modelo.
+- A aba que encosta no tubo nunca passa da profundidade dele (não bate na bandeja); na espera ela cresce com o afastamento.
+- Os fixadores ficam num subgrupo dentro da bandeja/estrutura e são redesenhados quando a peça é editada ou regerada (ex.: mudar a barra).
+- Relatório: peças por medida (`Cantoneira L25x25x2 c40`, ...) e consumo somado, multiplicado pela quantidade da bandeja. O painel web calcula o mesmo com `estimateFasteners`.
+- Testes: `tests/acm360-fasteners.test.js` e 6 checagens no SketchUp (`tests/sketchup/run_tests.rb`).
+
 ---
 
 ## M5 — Corte nas interferências e ajuste de pontas
@@ -369,7 +378,7 @@ flowchart TD
 ## Riscos e pendências
 
 > [!WARNING]
-> **Propriedade intelectual.** O repositório `acm3d-cs` foi criado como **público** e contém os três blocos `.skp` copiados da pasta `BLOCOS` do ACM360 (`Ancoragem_F001`, `Espera_F002`, `Cantoneira_Fixador_F003`). Esses arquivos são de terceiros. Recomendação: **tornar o repositório privado** e **substituir os blocos** por modelos desenhados pela CS antes de distribuir o plugin. O código do `acm3d-cs` foi escrito do zero (os `.rbe` são criptografados e não foram lidos), mas nomes de camadas e fluxos seguem a referência.
+> **Propriedade intelectual.** O repositório `acm3d-cs` foi criado como **público** e continha os três blocos `.skp` copiados da pasta `BLOCOS` do ACM360 (`Ancoragem_F001`, `Espera_F002`, `Cantoneira_Fixador_F003`), que são de terceiros. Desde o BETA 1.3.0 (M4) os fixadores são desenhados pelo plugin e os blocos saíram do BETA; eles seguem dentro dos pacotes do original e no histórico do git, por isso a recomendação de **manter o repositório privado** continua. O código do `acm3d-cs` foi escrito do zero (os `.rbe` são criptografados e não foram lidos), mas nomes de camadas e fluxos seguem a referência.
 
 | Risco | Impacto | Mitigação |
 | :--- | :--- | :--- |

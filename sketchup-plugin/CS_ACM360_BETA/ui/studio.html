@@ -288,13 +288,15 @@
       </div>
 
       <div class="card">
-        <h3>Fixadores 3D (.skp) & Leitura Automática de Bandejas ACM</h3>
+        <h3>Fixadores & Leitura Automática de Bandejas ACM</h3>
         <div class="btn-row">
           <button type="button" class="btn" onclick="CSStudio.callRuby('read_trays_create_frame', '{}')">Ler Bandejas ACM → Gerar Estrutura</button>
-          <button type="button" class="btn" onclick="CSStudio.callRuby('insert_fastener', 'F001')">+ Ancoragem (F001)</button>
-          <button type="button" class="btn" onclick="CSStudio.callRuby('insert_fastener', 'F002')">+ Espera (F002)</button>
-          <button type="button" class="btn" onclick="CSStudio.callRuby('insert_fastener', 'F003')">+ Cantoneira Fixador (F003)</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('distribute_fasteners', 'cantoneira')">Cantoneiras (Bandeja → Estrutura)</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('distribute_fasteners', 'ancoragem')">Ancoragens (Estrutura → Parede)</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('distribute_fasteners', 'espera')">Esperas / Afastadores</button>
+          <button type="button" class="btn danger" onclick="CSStudio.callRuby('remove_fasteners')">Remover Fixadores</button>
         </div>
+        <p class="hint">Aplica na seleção (sem seleção, pergunta se aplica no modelo todo). Os fixadores acompanham a peça ao editar e entram no relatório com parafusos, buchas e rebites. Medidas e espaçamentos ficam em Configurações.</p>
       </div>
     </section>
 
@@ -564,18 +566,37 @@
         <h3>Fixadores e Fita Dupla Face</h3>
         <div class="grid-4">
           <div class="field">
-            <label for="sFixSpacing">Espaçamento Fixadores (mm)</label>
+            <label for="sFixSpacing">Cantoneiras · Espaçamento (mm)</label>
             <input type="number" id="sFixSpacing" data-setting="fastener_spacing_mm" step="10">
           </div>
           <div class="field">
-            <label for="sFixOffset">Recuo dos Cantos (mm)</label>
+            <label for="sFixOffset">Cantoneiras · Recuo dos Cantos (mm)</label>
             <input type="number" id="sFixOffset" data-setting="fastener_offset_mm" step="5">
+          </div>
+          <div class="field">
+            <label for="sAnchorSpacing">Ancoragens · Espaçamento (mm)</label>
+            <input type="number" id="sAnchorSpacing" data-setting="anchor_spacing_mm" step="50">
+          </div>
+          <div class="field">
+            <label for="sAnchorMargin">Ancoragens · Recuo das Pontas (mm)</label>
+            <input type="number" id="sAnchorMargin" data-setting="anchor_margin_mm" step="10">
+          </div>
+          <div class="field">
+            <label for="sStandoff">Espera · Afastamento da Parede (mm)</label>
+            <input type="number" id="sStandoff" data-setting="standoff_mm" step="10">
           </div>
           <div class="field">
             <label for="sTape">Fita Padrão</label>
             <select id="sTape" data-setting="tape"></select>
           </div>
         </div>
+        <div class="table-wrapper" style="margin-top:10px;">
+          <table>
+            <thead><tr><th>Fixador</th><th>Aba A (mm)</th><th>Aba B (mm)</th><th>Compr. (mm)</th><th>Espessura</th><th>Consumo por peça (qtd item; …)</th></tr></thead>
+            <tbody id="sFastenersBody"></tbody>
+          </table>
+        </div>
+        <p class="hint">Cantoneira em L desenhada pelo plugin. Aba A encosta no retorno da bandeja (cantoneira) ou na parede (ancoragem/espera); na espera ela cresce com o afastamento. Exemplo de consumo: <code>2 Parafuso autobrocante 4,2×19; 2 Bucha S8</code>.</p>
         <div class="table-wrapper" style="margin-top:10px;">
           <table>
             <thead><tr><th>Fita</th><th>Largura (mm)</th><th>Rolo (m)</th><th>Preço/rolo (R$)</th><th></th></tr></thead>
@@ -767,6 +788,13 @@
             '</td><td>' + del('tapes', i) + '</td></tr>';
         }).join('');
 
+        document.getElementById('sFastenersBody').innerHTML = (d.fastener_specs || []).map(function(s, i) {
+          var items = (s.items || []).map(function(it) { return it.qty + ' ' + it.name; }).join('; ');
+          return '<tr><td>' + txt('fastener_specs', i, 'name', s.name) + '</td><td>' + num('fastener_specs', i, 'leg_a_mm', s.leg_a_mm) +
+            '</td><td>' + num('fastener_specs', i, 'leg_b_mm', s.leg_b_mm) + '</td><td>' + num('fastener_specs', i, 'length_mm', s.length_mm) +
+            '</td><td>' + num('fastener_specs', i, 'thickness_mm', s.thickness_mm, '0.5') + '</td><td>' + txt('fastener_specs', i, 'items_text', items) + '</td></tr>';
+        }).join('');
+
         var prices = d.profile_prices || {};
         var priceInput = function(id) {
           return '<input type="number" step="0.01" min="0" data-price-id="' + id + '" value="' + self.esc(prices[String(id)] || '') + '">';
@@ -804,6 +832,14 @@
           d.profile_prices[el.getAttribute('data-price-id')] = Number(el.value) || 0;
         } else if (el.hasAttribute('data-list')) {
           var item = d[el.getAttribute('data-list')][Number(el.getAttribute('data-idx'))];
+          if (el.getAttribute('data-field') === 'items_text') {
+            // "2 Rebite 4,8×12; 2 Parafuso 4,2×19" -> [{qty, name}]
+            item.items = el.value.split(';').map(function(part) {
+              var m = part.trim().match(/^(\d+)\s*[x×]?\s+(.+)$/);
+              return m ? { qty: Number(m[1]), name: m[2].trim() } : { qty: 1, name: part.trim() };
+            }).filter(function(it) { return it.name; });
+            return;
+          }
           item[el.getAttribute('data-field')] = el.type === 'number' ? Number(el.value) : el.value;
           if (el.getAttribute('data-field') === 'name') {
             this.fillOptions('sPreset', d.acm_presets, document.getElementById('sPreset').value);

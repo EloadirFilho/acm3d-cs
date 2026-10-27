@@ -1,7 +1,7 @@
 # encoding: UTF-8
 # ==============================================================================
 # CS_ACM360 - Módulo de Fixadores e Colagem (hardware_fasteners.rb)
-# Implementa os Módulos M3 (Colagem / Fita VHB) e M4 (Fixadores Avançados)
+# Implementa os Módulos M3 (Colagem / Fita VHB) e M4 (Fixadores)
 # ==============================================================================
 
 module CS_ACM360_BETA
@@ -62,81 +62,247 @@ module CS_ACM360_BETA
     end
 
     # --------------------------------------------------------------------------
-    # M4: Distribuição Automática de Cantoneiras / Fixadores em Bandejas ACM
+    # M4: Fixadores desenhados pelo plugin (cantoneira em L com medidas das
+    # Configurações), distribuídos por distância:
+    #   cantoneira -> bandeja ACM presa na estrutura (nos retornos da bandeja)
+    #   ancoragem  -> estrutura presa na parede (atrás dos tubos verticais)
+    #   espera     -> igual à ancoragem, com afastamento (standoff_mm) até a parede
+    # Cada fixador grava seu consumo (parafusos, buchas, rebites) para o relatório.
     # --------------------------------------------------------------------------
-    def distribute_fasteners_on_tray(tray_group, opts = {})
-      return unless tray_group && tray_group.valid?
+    TYPES = %w[cantoneira ancoragem espera].freeze
+    WALL_TYPES = %w[ancoragem espera].freeze
+    ARRAY_KIND = 'fastener_array'.freeze
 
-      spacing = (opts[:spacing] || Settings.get('fastener_spacing_mm')).to_f.mm
-      offset  = (opts[:offset]  || Settings.get('fastener_offset_mm')).to_f.mm
-      fastener_type = opts[:fastener_type] || 'F003' # Cantoneira_Fixador_F003
+    # Posições ao longo de um comprimento: margem nas pontas e passo <= espaçamento.
+    # Mesma regra de fastenerPositions() em ui/acm360-report.js.
+    def positions(len, spacing, margin)
+      return [] if len <= 0
+      usable = len - 2.0 * margin
+      return [len / 2.0] if usable <= 0
+      n = [(usable / spacing).floor + 1, 2].max
+      step = usable / (n - 1)
+      (0...n).map { |i| margin + i * step }
+    end
 
-      cfg = tray_cfg(tray_group)
-      w = cfg['width_mm'].to_f.mm
-      h = cfg['height_mm'].to_f.mm
-
-      skp_path = File.join(CS_ACM360_BETA::PLUGIN_DIR, 'BLOCOS', "#{fastener_type_filename(fastener_type)}.skp")
-      unless File.exist?(skp_path)
-        UI.messagebox("Bloco de fixador não encontrado:\n#{skp_path}")
-        return
-      end
-
+    # Distribui um tipo de fixador nos grupos escolhidos (bandejas para cantoneira,
+    # estruturas para ancoragem/espera). Refazer substitui os fixadores anteriores.
+    def distribute(groups, type)
+      type = type.to_s
+      raise ArgumentError, "tipo de fixador desconhecido: #{type}" unless TYPES.include?(type)
       model = Sketchup.active_model
-      model.start_operation('CS ACM360: Distribuir Fixadores', true)
+      count = 0
+      model.start_operation("CS ACM360: Distribuir #{Settings.fastener_spec(type)['name']}", true)
+      begin
+        groups.each do |g|
+          types = applied_types(g)
+          types -= WALL_TYPES if WALL_TYPES.include?(type) # ancoragem e espera não convivem no mesmo grupo
+          types |= [type]
+          g.set_attribute(Catalog::ATTR_DICT, 'fasteners', JSON.generate(types))
+          count += draw_fasteners(g)
+        end
+        model.commit_operation
+      rescue StandardError
+        model.abort_operation
+        raise
+      end
+      count
+    end
 
-      cdef = model.definitions.load(skp_path)
-      fastener_subgroup = tray_group.entities.add_group
-      fastener_subgroup.name = "Fixadores_#{fastener_type}"
-      fastener_subgroup.set_attribute(Catalog::ATTR_DICT, 'kind', 'fastener_array')
-
-      # Distribui nos 4 lados das abas da bandeja
-      # Lado Inferior (Y = 0)
-      place_linear_fasteners(fastener_subgroup.entities, cdef, [offset, 0, 0], [w - offset, 0, 0], spacing, 0.0)
-      # Lado Superior (Y = h)
-      place_linear_fasteners(fastener_subgroup.entities, cdef, [offset, h, 0], [w - offset, h, 0], spacing, 180.0.degrees)
-      # Lado Esquerdo (X = 0)
-      place_linear_fasteners(fastener_subgroup.entities, cdef, [0, offset, 0], [0, h - offset, 0], spacing, 90.0.degrees)
-      # Lado Direito (X = w)
-      place_linear_fasteners(fastener_subgroup.entities, cdef, [w, offset, 0], [w, h - offset, 0], spacing, -90.0.degrees)
-
+    def remove(groups)
+      model = Sketchup.active_model
+      model.start_operation('CS ACM360: Remover Fixadores', true)
+      groups.each do |g|
+        clear_arrays(g)
+        g.delete_attribute(Catalog::ATTR_DICT, 'fasteners')
+      end
       model.commit_operation
     end
 
-    # --------------------------------------------------------------------------
-    # Insere fixadores ao longo de uma linha de pontos
-    # --------------------------------------------------------------------------
-    def place_linear_fasteners(entities, cdef, pt_start, pt_end, spacing, rot_angle)
-      p1 = Geom::Point3d.new(pt_start)
-      p2 = Geom::Point3d.new(pt_end)
-      vec = p2 - p1
-      len = vec.length
-      return if len <= 0
+    # Redesenha os fixadores já aplicados (chamado ao regerar estrutura ou bandeja,
+    # dentro da operação do kernel). Retorna quantos foram desenhados.
+    def reapply(group)
+      return 0 if applied_types(group).empty?
+      draw_fasteners(group)
+    end
 
-      dir = vec.normalize
-      count = [ (len / spacing).floor, 1 ].max
-      step = len / count
+    # Redesenha todos os fixadores do modelo (após mudar medidas ou espaçamentos nas Configurações)
+    def redraw_all(model = Sketchup.active_model)
+      groups = []
+      UnfoldDxfEngine.each_cs_group(model.entities) { |g, _| groups << g unless applied_types(g).empty? }
+      return 0 if groups.empty?
+      model.start_operation('CS ACM360: Atualizar Fixadores', true)
+      n = groups.sum { |g| draw_fasteners(g) }
+      model.commit_operation
+      n
+    end
 
-      (0..count).each do |i|
-        pos = p1.offset(dir, step * i)
-        tr = Geom::Transformation.new(pos)
-        if rot_angle != 0.0
-          tr_rot = Geom::Transformation.rotation(pos, Geom::Vector3d.new(0, 0, 1), rot_angle)
-          tr = tr_rot * tr
+    # Grupos que recebem o tipo: seleção (inclusive dentro de grupos selecionados);
+    # sem nada adequado selecionado, pergunta se aplica no modelo inteiro.
+    def target_groups(type, ask: true)
+      kind = type.to_s == 'cantoneira' ? 'acm_tray' : 'parametric_frame'
+      model = Sketchup.active_model
+      found = []
+      UnfoldDxfEngine.each_cs_group(model.selection.to_a) { |g, k| found << g if k == kind }
+      return found unless found.empty?
+      UnfoldDxfEngine.each_cs_group(model.entities) { |g, k| found << g if k == kind }
+      return [] if found.empty?
+      what = kind == 'acm_tray' ? 'bandeja(s) ACM' : 'estrutura(s)'
+      return found unless ask
+      UI.messagebox("Nada adequado selecionado. Aplicar em todas as #{found.size} #{what} do modelo?", MB_YESNO) == IDYES ? found : []
+    end
+
+    # Ação de menu/painel: distribui e devolve a mensagem para o usuário
+    def distribute_from_selection(type)
+      groups = target_groups(type)
+      if groups.empty?
+        what = type.to_s == 'cantoneira' ? 'Bandeja ACM com dobra' : 'Estrutura'
+        return "Nenhuma #{what} para receber fixadores."
+      end
+      n = distribute(groups, type)
+      "#{n} × #{Settings.fastener_spec(type)['name']} em #{groups.size} grupo(s)"
+    end
+
+    def remove_from_selection
+      model = Sketchup.active_model
+      groups = []
+      UnfoldDxfEngine.each_cs_group(model.selection.to_a) { |g, _| groups << g unless applied_types(g).empty? }
+      return 'Selecione bandejas ou estruturas com fixadores para remover.' if groups.empty?
+      remove(groups)
+      "Fixadores removidos de #{groups.size} grupo(s)"
+    end
+
+    def applied_types(group)
+      list = JSON.parse(group.get_attribute(Catalog::ATTR_DICT, 'fasteners').to_s) rescue []
+      Array(list) & TYPES
+    end
+
+    def draw_fasteners(group)
+      clear_arrays(group)
+      kind = group.get_attribute(Catalog::ATTR_DICT, 'kind')
+      applied_types(group).sum do |type|
+        if type == 'cantoneira' && kind == 'acm_tray'
+          place_on_tray(group)
+        elsif WALL_TYPES.include?(type) && kind == 'parametric_frame'
+          place_on_frame(group, type)
+        else
+          0
         end
-        inst = entities.add_instance(cdef, tr)
-        inst.set_attribute(Catalog::ATTR_DICT, 'kind', 'fastener_instance')
       end
     end
 
-    def fastener_type_filename(code)
-      case code.to_s.upcase
-      when 'F001', 'ANCORAGEM'
-        'Ancoragem_F001'
-      when 'F002', 'ESPERA'
-        'Espera_F002'
-      else
-        'Cantoneira_Fixador_F003'
+    def clear_arrays(group)
+      arrays = group.entities.grep(Sketchup::Group).select { |g| g.get_attribute(Catalog::ATTR_DICT, 'kind') == ARRAY_KIND }
+      group.entities.erase_entities(arrays) unless arrays.empty?
+    end
+
+    def new_array(group, type)
+      arr = group.entities.add_group
+      arr.name = "Fixadores · #{Settings.fastener_spec(type)['name']}"
+      arr.set_attribute(Catalog::ATTR_DICT, 'kind', ARRAY_KIND)
+      arr.set_attribute(Catalog::ATTR_DICT, 'fastener_type', type)
+      FrameKernel.ensure_layer(Sketchup.active_model, 'CS_ACM360_Fixadores', arr)
+      arr
+    end
+
+    # Cantoneira no fundo de cada retorno: uma aba no retorno (rebite), a outra no
+    # plano de trás da bandeja, voltada para dentro, onde fica o tubo (parafuso).
+    def place_on_tray(tray)
+      cfg = tray_cfg(tray)
+      spec = Settings.fastener_spec('cantoneira')
+      spacing = Settings.get('fastener_spacing_mm').to_f
+      margin  = Settings.get('fastener_offset_mm').to_f
+      ox, oy, oz = cfg['origin_x_mm'].to_f, cfg['origin_y_mm'].to_f, cfg['origin_z_mm'].to_f
+      w, h, th = cfg['width_mm'].to_f, cfg['height_mm'].to_f, cfg['thickness_mm'].to_f
+      edges = cfg['edges'] || {}
+      defn = angle_definition('cantoneira', spec['leg_a_mm'])
+      arr = new_array(tray, 'cantoneira')
+      back = Geom::Vector3d.new(0, -1, 0)
+      n = 0
+      %w[inf sup esq dir].each do |side|
+        e = edges[side] || {}
+        next unless %w[dobra dobra_aba].include?(e['type'].to_s) && e['return_mm'].to_f > spec['thickness_mm']
+        y_back = oy + e['return_mm'].to_f
+        along, inward, corner = case side
+                                when 'inf' then [w, [0, 0, 1],  ->(p) { [ox + p, y_back, oz + th] }]
+                                when 'sup' then [w, [0, 0, -1], ->(p) { [ox + p, y_back, oz + h - th] }]
+                                when 'esq' then [h, [1, 0, 0],  ->(p) { [ox + th, y_back, oz + p] }]
+                                else            [h, [-1, 0, 0], ->(p) { [ox + w - th, y_back, oz + p] }]
+                                end
+        positions(along, spacing, margin).each do |p|
+          place(arr, defn, spec, corner.call(p), back, Geom::Vector3d.new(inward))
+          n += 1
+        end
       end
+      n
+    end
+
+    # Ancoragem/espera nos tubos verticais da estrutura (laterais e montantes): uma aba
+    # na lateral do tubo (autobrocante), a outra na parede atrás (bucha + parafuso).
+    def place_on_frame(frame, type)
+      tubes = JSON.parse(frame.get_attribute(Catalog::ATTR_DICT, 'tubes_json').to_s) rescue []
+      spec = Settings.fastener_spec(type)
+      standoff = type == 'espera' ? Settings.get('standoff_mm').to_f : 0.0
+      spacing = Settings.get('anchor_spacing_mm').to_f
+      margin  = Settings.get('anchor_margin_mm').to_f
+      arr = new_array(frame, type)
+      back = Geom::Vector3d.new(0, -1, 0)
+      vertical = tubes.select { |t| t['axis'] == 'z' }
+      list = vertical.empty? ? tubes : vertical # estrutura sem verticais: usa os horizontais
+      n = 0
+      list.each do |t|
+        x, y, z = t['x_mm'].to_f, t['y_mm'].to_f, t['z_mm'].to_f
+        wall_y = y + t['d_mm'].to_f + standoff
+        # A aba no tubo não passa da profundidade dele (senão bate na bandeja)
+        defn = angle_definition(type, [spec['leg_a_mm'], t['d_mm'].to_f].min + standoff)
+        if t['axis'] == 'z'
+          left = t['slot'].to_s == 'c1' # lateral esquerda: aba para fora, do lado esquerdo
+          x_face = left ? x : x + t['w_mm'].to_f
+          out = Geom::Vector3d.new(left ? -1 : 1, 0, 0)
+          positions(t['length_mm'].to_f, spacing, margin).each do |p|
+            place(arr, defn, spec, [x_face, wall_y, z + p], back, out)
+            n += 1
+          end
+        else
+          bottom = t['slot'].to_s == 'inf'
+          z_face = bottom ? z : z + t['h_mm'].to_f
+          out = Geom::Vector3d.new(0, 0, bottom ? -1 : 1)
+          positions(t['length_mm'].to_f, spacing, margin).each do |p|
+            place(arr, defn, spec, [x + p, wall_y, z_face], back, out)
+            n += 1
+          end
+        end
+      end
+      n
+    end
+
+    # Cantoneira em L: aba A ao longo de +Y local, aba B ao longo de +Z local, comprimento em X.
+    # Uma definição por medida, reaproveitada no modelo.
+    def angle_definition(type, leg_a_mm)
+      spec = Settings.fastener_spec(type)
+      a, b, t, l = leg_a_mm.to_f, spec['leg_b_mm'], spec['thickness_mm'], spec['length_mm']
+      name = format('CS %s L%gx%gx%g c%g', spec['name'].split(' ').first, a.round(1), b.round(1), t, l)
+      model = Sketchup.active_model
+      defn = model.definitions[name]
+      return defn if defn && defn.entities.grep(Sketchup::Face).any?
+      defn = model.definitions.add(name)
+      pts = [[0, 0, 0], [0, a, 0], [0, a, t], [0, t, t], [0, t, b], [0, 0, b]].map { |q| Geom::Point3d.new(q.map(&:mm)) }
+      face = defn.entities.add_face(pts)
+      face.reverse! if face.normal.x < 0
+      face.pushpull(l.mm)
+      defn.set_attribute(Catalog::ATTR_DICT, 'kind', 'fastener_def')
+      defn
+    end
+
+    # corner: ponto da quina do L (mm, coordenadas do grupo); leg_a/leg_b: direções das abas
+    def place(arr, defn, spec, corner_mm, leg_a, leg_b)
+      xaxis = leg_a * leg_b
+      origin = Geom::Point3d.new(corner_mm.map { |v| v.to_f.mm }).offset(xaxis, -spec['length_mm'].mm / 2.0)
+      inst = arr.entities.add_instance(defn, Geom::Transformation.axes(origin, xaxis, leg_a, leg_b))
+      inst.set_attribute(Catalog::ATTR_DICT, 'kind', 'fastener')
+      inst.set_attribute(Catalog::ATTR_DICT, 'fastener_type', spec['id'])
+      inst.set_attribute(Catalog::ATTR_DICT, 'fastener_label', defn.name.sub(/\ACS /, ''))
+      inst.set_attribute(Catalog::ATTR_DICT, 'consumption_json', JSON.generate(spec['items']))
+      inst
     end
 
     # Parâmetros gravados pela AcmTrayKernel no atributo tray_json

@@ -70,6 +70,7 @@ module CS_ACM360_BETA
 
         # Salva metadados paramétricos e lista de corte no dicionário do grupo
         save_frame_attributes(root_group, cfg, recipe)
+        HardwareFasteners.reapply(root_group)
 
         model.commit_operation
         model.selection.clear
