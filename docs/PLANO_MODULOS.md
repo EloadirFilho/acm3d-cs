@@ -345,7 +345,7 @@ flowchart TD
 - **Ruby**: testes dos cálculos puros (emendas, FFD, planificação, arco) com `minitest`, rodando fora do SketchUp.
 - **JavaScript**: testes do nesting e do plano de barras com Node (`node --test`), incluindo casos aleatórios verificando "nenhuma sobreposição".
 - **Casos de referência**: 5 projetos reais da CS (fachada simples, fachada com letra caixa, totem, testeira curva, painel com recortes) com resultado conferido à mão; rodar a cada mudança.
-- **SketchUp**: checklist manual por versão suportada (definir: 2021 a 2026).
+- **SketchUp**: checklist manual no SketchUp 2025 (versão usada pela CS).
 
 ---
 
@@ -362,9 +362,9 @@ flowchart TD
 | Backend do ERP ainda não existe | M11 Etapa B bloqueada | Etapa A (JSON) cobre o fluxo até lá. |
 | Fator de dobra varia por fornecedor de ACM e fresa | Peça sai com medida errada | Cadastro por chapa/fresa em M12 e peça de teste para calibrar. |
 
-### Perguntas em aberto para a CS
-1. Quais versões do SketchUp a equipe usa hoje?
-2. Fornecedores e espessuras de ACM mais usados (para os padrões de M12)?
-3. A Router CNC aceita DXF R12 com blocos ou precisa de entidades soltas (`LINE`/`POLYLINE`)?
-4. O plugin será usado só internamente ou também vendido/distribuído?
-5. Já existe previsão de backend/API para o CS Fachadas ERP?
+### Perguntas para a CS (respondidas em 27/10/2026)
+1. **Versão do SketchUp**: 2025. Testes e checklist passam a mirar o SketchUp 2025.
+2. **ACM**: espessuras de 3 mm e 4 mm, de diversos fornecedores. M12 deve ter cadastro de fator de dobra por fornecedor/espessura.
+3. **CNC**: os DXFs são importados no **Vectric Aspire**, que gera o G-code (`.txt`) levado à Router por pendrive; um aplicativo próprio roda o G-code na máquina e ainda precisa de ajustes. **Testado**: o DXF R12 exportado pelo plugin importa corretamente no Aspire — manter o formato atual.
+4. **Distribuição**: uso **interno**. Sem licença/login; ainda assim, manter o repositório privado por causa dos blocos de terceiros.
+5. **Backend do ERP**: sem previsão. M11 fica na **Etapa A** (troca por `.json`); Etapa B adiada.

@@ -31,6 +31,8 @@ acm3d-cs/
         │   ├── frame_kernel.rb         # Motor 3D de Gradil, Tubos, Cortes 0°/45°, Emendas e FFD 1D
         │   ├── acm_tray_kernel.rb      # Motor 3D de Bandejas ACM, Malha e Leitura ACM → Estrutura
         │   ├── unfold_dxf_engine.rb    # Motor de Planificação 2D/3D, Nesting e Exportador DXF AC1009
+        │   ├── hardware_fasteners.rb   # M3/M4: Fita 3M VHB, reforços e distribuição de cantoneiras F003
+        │   ├── report_generator.rb     # M8: Relatório estrutural, lista de corte e exportação CSV (Excel)
         │   └── studio_dialog.rb        # Ponte Ruby <-> UI::HtmlDialog
         └── ui/
             └── studio.html             # Interface do Construtor ao Vivo dentro do SketchUp
@@ -38,13 +40,32 @@ acm3d-cs/
 
 ---
 
+## 🎯 Contexto de Uso
+
+- **Uso interno** da CS Comunicação / CS Fachadas (sem licença ou login).
+- **SketchUp 2025** é a versão usada pela equipe e a versão de referência para testes.
+- **Chapas de ACM de 3 mm e 4 mm**, de diversos fornecedores (o fator de dobra deve ser calibrado por fornecedor/fresa).
+- **Fluxo CNC**: DXF do plugin (testado e validado no Aspire) → **Vectric Aspire** (gera o G-code em `.txt`) → pendrive → aplicativo que envia o G-code para a Router.
+- **Sem backend do ERP previsto**: a troca entre plugin e painel web é feita por arquivos `.json` / `.dxf`.
+
+---
+
 ## 🚀 Como Instalar o Plugin no SketchUp
 
-1. Abra o **SketchUp**.
+1. Abra o **SketchUp 2025**.
 2. Acesse **Extensões > Gerenciador de Extensões** (ou **Janela > Gerenciador de Extensões**).
 3. Clique no botão **Instalar Extensão…** no canto inferior.
 4. Selecione o arquivo **`CS_ACM360_v1.0.0.rbz`** localizado na raiz deste repositório.
 5. A barra de ferramentas **`CS ACM360`** e o menu **`Extensões > CS ACM360 · Estruturas & ACM`** ficarão disponíveis imediatamente.
+
+### Principais comandos do plugin
+- **Estruturas**: Novo Gradil com Travessas, Tubo Avulso, Ler ACM → Estrutura, cores por tipo/comprimento/acabamento.
+- **Bandejas ACM**: Bandeja paramétrica, Fachada em Malha, Planificar no 3D, Plano de Corte e Exportar DXF CNC.
+- **Fixadores & Colagem**: Distribuir Cantoneiras (F003) na seleção, Calcular Fita 3M VHB & Promotor de Adesão, inserir blocos F001/F002/F003.
+- **Relatório**: Relatório Estrutural & Plano de Barras 1D, Exportar Lista de Corte CSV (Excel).
+- **Publicar**: exporta o pacote `.json` para o CS Fachadas ERP.
+
+Os mesmos comandos aparecem no menu de contexto (botão direito) sobre estruturas e bandejas.
 
 ---
 
@@ -69,7 +90,25 @@ Na barra superior do sistema, clique na aba **`ACM360 Studio`** para acessar:
   - `ACM_VINCO` (Magenta — ACI 174)
   - `ACM_DIRECAO` (Cinza — ACI 8)
   - `ACM_ETIQUETAS` (Branco — ACI 7)
+- **3. Materiais, VHB & Fixadores**: Lista de materiais (BOM), metros e rolos de fita 3M VHB (4910 / 4941 / 4955), quantidade de cantoneiras, parafusos e buchas, com **📊 Baixar CSV (Excel)**.
 - **🚀 Gerar OS + Enviar Barras & Chapas p/ Produção**: Cria instantaneamente uma Ordem de Serviço no Quadro do Chão de Fábrica com a quantidade exata de metros lineares/barras de Metalon e área ($\text{m}^2$) de chapas de ACM.
+
+---
+
+## 🗺️ Status dos Módulos
+
+| Módulo | Status |
+| :--- | :--- |
+| Fase 1 — MVP (gradil, tubos, bandejas, Ler ACM, planificação, DXF, OS no ERP) | ✅ Concluído |
+| M3 — Colagem (fita 3M VHB e reforços) | 🟡 Parcial (cálculo de metros/rolos; desenho da fita e tiras pendentes) |
+| M4 — Fixadores avançados | 🟡 Parcial (distribuição de cantoneiras F003 e consumo de parafusos/buchas) |
+| M8 — Relatório, lista de corte e exportação | 🟡 Parcial (relatório + CSV; XLSX pendente) |
+| M1, M2, M5, M6, M7, M9, M10, M11, M12 | ⬜ Planejado |
+
+Detalhes e critérios de aceite em [docs/PLANO_MODULOS.md](docs/PLANO_MODULOS.md).
+
+> [!WARNING]
+> Os blocos `BLOCOS/*.skp` vieram da referência ACM360 (terceiros). Como o plugin é de uso interno, recomenda-se manter este repositório **privado** e substituir os blocos por modelos próprios da CS.
 
 ---
 
