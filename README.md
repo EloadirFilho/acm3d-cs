@@ -11,7 +11,9 @@ Sistema híbrido de engenharia para **Fachadas em ACM e Estruturas Metálicas**,
 ```text
 acm3d-cs/
 ├── CS_ACM360_v1.0.0.rbz                # Pacote pronto para instalar no SketchUp
-├── PLANO_PROJETO.md                    # Plano técnico, arquitetura, fórmulas e roadmap
+├── PLANO_PROJETO.md                    # Plano técnico, arquitetura, fórmulas e roadmap Fase 1
+├── docs/
+│   └── PLANO_MODULOS.md                # Planejamento completo dos 12 módulos avançados (M1 a M12)
 ├── README.md                           # Documentação principal do projeto
 ├── index.html                          # Interface Web (Totem Chão de Fábrica + ACM360 Studio)
 ├── styles.css                          # Design System Industrial High-Contrast & CAD Studio
