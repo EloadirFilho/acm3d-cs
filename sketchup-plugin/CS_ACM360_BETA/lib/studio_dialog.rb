@@ -1,6 +1,6 @@
 # encoding: UTF-8
 # ==============================================================================
-# CS_ACM360::StudioDialog
+# CS_ACM360_BETA::StudioDialog
 # Gerencia a janela interativa UI::HtmlDialog dentro do SketchUp, conectando
 # os controles visuais (Construtor de Estruturas, Bandejas ACM, Emendas,
 # Planificação e Exportação DXF/ERP) aos Kernels Ruby.
@@ -8,7 +8,7 @@
 
 require 'json'
 
-module CS_ACM360
+module CS_ACM360_BETA
   module StudioDialog
     @dialog = nil
 
@@ -21,8 +21,8 @@ module CS_ACM360
       end
 
       @dialog = UI::HtmlDialog.new(
-        dialog_title: "CS ACM360 v#{CS_ACM360::PLUGIN_VERSION} · Construtor ao Vivo & Planificador",
-        preferences_key: 'CS_ACM360_StudioDialog',
+        dialog_title: "CS ACM360 BETA v#{CS_ACM360_BETA::PLUGIN_VERSION} · Construtor ao Vivo & Planificador",
+        preferences_key: 'CS_ACM360_BETA_StudioDialog',
         scrollable: true,
         resizable: true,
         width: 980,
@@ -32,7 +32,7 @@ module CS_ACM360
         style: UI::HtmlDialog::STYLE_DIALOG
       )
 
-      html_path = File.join(CS_ACM360::PLUGIN_DIR, 'ui', 'studio.html')
+      html_path = File.join(CS_ACM360_BETA::PLUGIN_DIR, 'ui', 'studio.html')
       @dialog.set_file(html_path)
 
       register_callbacks(@dialog, initial_tab)
@@ -100,12 +100,55 @@ module CS_ACM360
       dlg.add_action_callback('refresh_state') do |_ctx|
         push_state_to_ui
       end
+
+      # --- M12: Configurações ---
+      dlg.add_action_callback('save_settings') do |_ctx, json_str|
+        raw = JSON.parse(json_str.to_s) rescue nil
+        if raw.is_a?(Hash)
+          before = Settings.all.values_at('bar_mm', 'kerf_mm')
+          after  = Settings.save(raw).values_at('bar_mm', 'kerf_mm')
+          n = before != after ? FrameKernel.regenerate_all_frames : 0
+          msg = n > 0 ? "Configurações salvas · #{n} estrutura(s) regerada(s) com a nova barra" : 'Configurações salvas'
+          push_state_to_ui
+          dlg.execute_script("window.CSStudio && window.CSStudio.setStatus(#{JSON.generate(msg)});")
+        end
+      end
+
+      dlg.add_action_callback('reset_settings') do |_ctx|
+        if UI.messagebox('Voltar todas as configurações ao padrão de fábrica (nesta máquina e neste modelo)?', MB_YESNO) == IDYES
+          Settings.reset!
+          FrameKernel.regenerate_all_frames
+          push_state_to_ui
+        end
+      end
+
+      dlg.add_action_callback('export_settings') do |_ctx|
+        path = UI.savepanel('Exportar Configurações CS ACM360', nil, 'CS_ACM360_config.json')
+        if path
+          path += '.json' unless path.downcase.end_with?('.json')
+          File.write(path, JSON.pretty_generate(Settings.export_payload), mode: 'w:UTF-8')
+        end
+      end
+
+      dlg.add_action_callback('import_settings') do |_ctx|
+        path = UI.openpanel('Importar Configurações CS ACM360', nil, 'Configuração|*.json||')
+        if path
+          begin
+            Settings.import_payload(File.read(path, mode: 'r:UTF-8'))
+            FrameKernel.regenerate_all_frames
+            push_state_to_ui
+          rescue StandardError => e
+            UI.messagebox("Não foi possível importar: #{e.message}")
+          end
+        end
+      end
     end
 
     def self.push_state_to_ui(tab = nil)
       return unless @dialog && @dialog.visible?
       payload = UnfoldDxfEngine.build_erp_payload
-      payload['profiles'] = Catalog::TUBE_PROFILES
+      payload['profiles'] = Settings.profiles
+      payload['settings'] = Settings.all
       payload['initial_tab'] = tab if tab
       json_str = JSON.generate(payload)
       @dialog.execute_script("window.CSStudio && window.CSStudio.loadModelState(#{json_str});")

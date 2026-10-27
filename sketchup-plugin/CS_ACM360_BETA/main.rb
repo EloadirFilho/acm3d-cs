@@ -6,18 +6,19 @@
 
 require 'sketchup.rb'
 
-require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'catalog')
-require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'frame_kernel')
-require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'acm_tray_kernel')
-require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'hardware_fasteners')
-require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'report_generator')
-require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'unfold_dxf_engine')
-require File.join(CS_ACM360::PLUGIN_DIR, 'lib', 'studio_dialog')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'catalog')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'settings')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'frame_kernel')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'acm_tray_kernel')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'hardware_fasteners')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'report_generator')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'unfold_dxf_engine')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'studio_dialog')
 
-module CS_ACM360
+module CS_ACM360_BETA
   unless file_loaded?(__FILE__)
     # 1. Menu Principal em Extensões > CS ACM360 (Estruturas & ACM)
-    ext_menu = UI.menu('Plugins').add_submenu('CS ACM360 · Estruturas & ACM')
+    ext_menu = UI.menu('Plugins').add_submenu('CS ACM360 BETA · Estruturas & ACM')
 
     ext_menu.add_item('Abrir Construtor ao Vivo (Painel Completo)…') do
       StudioDialog.show('frame')
@@ -62,12 +63,12 @@ module CS_ACM360
     sub_fix.add_item('Calcular Fita 3M VHB & Promotor de Adesão…') do
       vhb = HardwareFasteners.calculate_vhb_tape_requirements
       UI.messagebox(
-        "--- CÁLCULO DE COLAGEM 3M VHB ---\n\n" \
+        "--- CÁLCULO DE COLAGEM · #{vhb[:tape_name]} ---\n\n" \
         "Bandejas Analisadas: #{vhb[:tray_count]}\n" \
         "Perímetro de Dobras: #{vhb[:perimeter_meters]} m\n" \
         "Reforços Intermediários: #{vhb[:stiffener_meters]} m\n" \
         "Total Fita VHB: #{vhb[:total_tape_meters]} m\n" \
-        "Rolos de 33m recomendados: #{vhb[:rolls_needed]} rolo(s)\n" \
+        "Rolos de #{vhb[:roll_m]}m recomendados: #{vhb[:rolls_needed]} rolo(s)\n" \
         "Promotor Primer 3M AP111 / 94: #{vhb[:primer_cans]} frasco(s) (250ml)"
       )
     end
@@ -82,9 +83,11 @@ module CS_ACM360
     ext_menu.add_item('Publicar Projeto para CS Fachadas ERP (.json)…') do
       UnfoldDxfEngine.export_erp_json_dialog
     end
+    ext_menu.add_separator
+    ext_menu.add_item('Configurações (Barras, ACM, Bitolas, Fitas, Impressão)…') { StudioDialog.show('settings') }
 
     # 2. Barra de Ferramentas (Toolbar)
-    toolbar = UI::Toolbar.new('CS ACM360')
+    toolbar = UI::Toolbar.new('CS ACM360 BETA')
 
     cmd_studio = UI::Command.new('Construtor ao Vivo') { StudioDialog.show('frame') }
     cmd_studio.tooltip = 'CS ACM360 — Construtor ao Vivo (Gradil, Tubos e Emendas)'
@@ -132,7 +135,7 @@ module CS_ACM360
       kind = first.get_attribute(Catalog::ATTR_DICT, 'kind')
       next unless kind
 
-      sub = context_menu.add_submenu('CS ACM360')
+      sub = context_menu.add_submenu('CS ACM360 BETA')
       if kind == 'parametric_frame'
         sub.add_item('Editar Estrutura no Painel…') { StudioDialog.show('frame') }
         sub.add_item('Ver Relatório e Emendas de Barra…') { StudioDialog.show('report') }

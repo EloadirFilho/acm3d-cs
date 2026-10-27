@@ -1,6 +1,6 @@
 # encoding: UTF-8
 # ==============================================================================
-# CS_ACM360::UnfoldDxfEngine
+# CS_ACM360_BETA::UnfoldDxfEngine
 # Motor de Planificação 2D/3D de Bandejas ACM (desconto de fator de dobra,
 # retornos, abas, refile e cantos 45°), Geração de Geometria Planificada no
 # SketchUp, Nesting 2D de Chapas ACM, Exportação DXF AC1009 (AutoCAD R12) com
@@ -10,7 +10,7 @@
 
 require 'json'
 
-module CS_ACM360
+module CS_ACM360_BETA
   module UnfoldDxfEngine
     MM_TO_INCH = 1.0 / 25.4
 
@@ -32,7 +32,8 @@ module CS_ACM360
     def self.compute_tray_unfold(cfg)
       w = cfg['width_mm'].to_f
       h = cfg['height_mm'].to_f
-      k = (cfg['bend_factor_mm'] || 1.5).to_f
+      k = (cfg['bend_factor_mm'] || Settings.bend_factor_mm).to_f
+      refile_default = (cfg['refile_tab_mm'] || Settings.get('refile_tab_mm')).to_f
       edges = cfg['edges'] || {}
 
       ext_side = lambda do |side_key|
@@ -44,7 +45,7 @@ module CS_ACM360
         when 'corte'
           { total: 0.0, folds: [] }
         when 'refile'
-          r_mm = [ret > 0 ? ret : 15.0, 5.0].max
+          r_mm = [ret > 0 ? ret : refile_default, 5.0].max
           { total: r_mm, folds: [] }
         when 'dobra'
           eff_r = [ret - k, 0.0].max
@@ -432,7 +433,7 @@ module CS_ACM360
         return
       end
 
-      nesting = nest_unfolded_parts(trays, 5000.0, 1220.0, 8.0, 10.0)
+      nesting = nest_with_settings(trays)
       first_sheet = nesting['sheets'].first
       unless first_sheet
         UI.messagebox('Não foi possível posicionar as peças na chapa padrão.')
@@ -446,6 +447,12 @@ module CS_ACM360
       dxf_str = generate_dxf_ac1009(nesting['sheet_w_mm'], nesting['sheet_h_mm'], first_sheet[:placements])
       File.write(path, dxf_str, mode: 'w:UTF-8')
       UI.messagebox("Arquivo DXF exportado com sucesso!\n\nCamadas geradas: ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_DIRECAO, ACM_ETIQUETAS\nCaminho: #{path}")
+    end
+
+    # Nesting com chapa, espaçamento e margem das Configurações (M12)
+    def self.nest_with_settings(parts)
+      st = Settings.all
+      nest_unfolded_parts(parts, st['acm_sheet_w_mm'], st['acm_sheet_h_mm'], st['nest_gap_mm'], st['nest_margin_mm'])
     end
 
     def self.collect_model_unfolded_trays(model)
@@ -497,8 +504,8 @@ module CS_ACM360
       end
 
       unfold_list = trays.map { |t| t['unfold'] }.compact
-      nesting = unfold_list.empty? ? nil : nest_unfolded_parts(unfold_list, 5000.0, 1220.0, 8.0, 10.0)
-      bar_plan = FrameKernel.summarize_tubes(all_tubes, 6000.0, 3.0)
+      nesting = unfold_list.empty? ? nil : nest_with_settings(unfold_list)
+      bar_plan = FrameKernel.summarize_tubes(all_tubes, Settings.get('bar_mm'), Settings.get('kerf_mm'))
 
       {
         'schema'       => 'CS_ACM360_ERP_V1',

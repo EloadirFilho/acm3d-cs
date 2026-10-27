@@ -1,6 +1,6 @@
 # encoding: UTF-8
 # ==============================================================================
-# CS_ACM360::FrameKernel
+# CS_ACM360_BETA::FrameKernel
 # Construtor Paramétrico 3D de Estruturas Metálicas (Gradil, Tubos, Travessas,
 # Montantes, Emendas de Produção, Cortes Retos/Meia-Esquadria e Modos de Cor).
 # Reproduz e aprimora a lógica geométrica do ACM360 (A002 e A003).
@@ -8,7 +8,7 @@
 
 require 'json'
 
-module CS_ACM360
+module CS_ACM360_BETA
   module FrameKernel
     MM_TO_INCH = 1.0 / 25.4
 
@@ -62,7 +62,7 @@ module CS_ACM360
 
         # Remove subgrupos vazios
         [quadro_grp, montantes_grp, travessas_grp].each do |g|
-          g.erase! if g.valid? && g.entities.empty?
+          g.erase! if g.valid? && g.entities.length.zero?
         end
 
         # Desenha guia de folga de ACM se ativada
@@ -133,7 +133,9 @@ module CS_ACM360
       end
     end
 
+    # Barra comercial e perda da serra vêm sempre das Configurações (M12), não do grupo
     def self.normalize_params(raw = {})
+      st = Settings.all
       {
         'name'             => (raw['name'] || 'Estrutura Gradil #01').to_s,
         'width_mm'         => (raw['width_mm'] || 3000.0).to_f.clamp(100.0, 50000.0),
@@ -156,12 +158,12 @@ module CS_ACM360
         'folga_sup_mm'     => (raw['folga_sup_mm'] || 0.0).to_f.clamp(0.0, 500.0),
         'folga_inf_mm'     => (raw['folga_inf_mm'] || 0.0).to_f.clamp(0.0, 500.0),
         'folga_frente_mm'  => (raw['folga_frente_mm'] || 0.0).to_f.clamp(0.0, 500.0),
-        'acm_esp_mm'       => (raw['acm_esp_mm'] || 3.0).to_f,
+        'acm_esp_mm'       => (raw['acm_esp_mm'] || Settings.acm_thickness_mm).to_f,
         'guia_folga'       => !!raw['guia_folga'],
-        'bar_mm'           => (raw['bar_mm'] || 6000.0).to_f.clamp(1000.0, 12000.0),
-        'kerf_mm'          => (raw['kerf_mm'] || 3.0).to_f.clamp(0.0, 15.0),
-        'seam_strategy'    => (raw['seam_strategy'] || 'economia').to_s,
-        'color_mode'       => (raw['color_mode'] || 'tipo').to_s,
+        'bar_mm'           => st['bar_mm'],
+        'kerf_mm'          => st['kerf_mm'],
+        'seam_strategy'    => (raw['seam_strategy'] || st['seam_strategy']).to_s,
+        'color_mode'       => (raw['color_mode'] || st['color_mode']).to_s,
         'custom_v_xs_mm'   => raw['custom_v_xs_mm'].is_a?(Array) ? raw['custom_v_xs_mm'].map(&:to_f) : nil,
         'custom_h_zs_mm'   => raw['custom_h_zs_mm'].is_a?(Array) ? raw['custom_h_zs_mm'].map(&:to_f) : nil,
         'seam_overrides'   => raw['seam_overrides'].is_a?(Hash) ? raw['seam_overrides'] : {}
@@ -350,6 +352,20 @@ module CS_ACM360
         seams: seams_info,
         summary: summarize_tubes(tubes, cfg['bar_mm'], cfg['kerf_mm'])
       }
+    end
+
+    # Regera todas as estruturas paramétricas do modelo (ex.: após mudar a barra comercial)
+    def self.regenerate_all_frames(model = Sketchup.active_model)
+      return 0 unless model
+      frames = model.active_entities.grep(Sketchup::Group).select do |g|
+        g.get_attribute(Catalog::ATTR_DICT, 'kind') == 'parametric_frame'
+      end
+      frames.each do |grp|
+        params = JSON.parse(grp.get_attribute(Catalog::ATTR_DICT, 'params_json').to_s) rescue {}
+        create_or_update_frame(params, grp)
+      end
+      model.selection.clear
+      frames.size
     end
 
     # Calcula posições de emenda (mm a partir do início do tubo)
@@ -556,7 +572,7 @@ module CS_ACM360
 
     def self.save_frame_attributes(group, cfg, recipe)
       group.set_attribute(Catalog::ATTR_DICT, 'kind', 'parametric_frame')
-      group.set_attribute(Catalog::ATTR_DICT, 'version', CS_ACM360::PLUGIN_VERSION)
+      group.set_attribute(Catalog::ATTR_DICT, 'version', CS_ACM360_BETA::PLUGIN_VERSION)
       group.set_attribute(Catalog::ATTR_DICT, 'params_json', JSON.generate(cfg))
       group.set_attribute(Catalog::ATTR_DICT, 'tubes_json', JSON.generate(recipe[:tubes]))
       group.set_attribute(Catalog::ATTR_DICT, 'seams_json', JSON.generate(recipe[:seams]))

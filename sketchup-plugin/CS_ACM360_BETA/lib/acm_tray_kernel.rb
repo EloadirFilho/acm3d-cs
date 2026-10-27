@@ -1,6 +1,6 @@
 # encoding: UTF-8
 # ==============================================================================
-# CS_ACM360::AcmTrayKernel
+# CS_ACM360_BETA::AcmTrayKernel
 # Construtor e Editor de Bandejas de ACM 3D (retornos, abas, refile, cantos 45°),
 # Leitura Automática de Bandejas ACM -> Geração de Estrutura Metálica (ler_acm),
 # Colagem (Fita Dupla-Face e Tiras de Reforço) e Inserção de Fixadores 3D (.skp).
@@ -8,7 +8,7 @@
 
 require 'json'
 
-module CS_ACM360
+module CS_ACM360_BETA
   module AcmTrayKernel
     MM_TO_INCH = 1.0 / 25.4
 
@@ -44,7 +44,7 @@ module CS_ACM360
         flat_data = UnfoldDxfEngine.compute_tray_unfold(cfg)
 
         grp.set_attribute(Catalog::ATTR_DICT, 'kind', 'acm_tray')
-        grp.set_attribute(Catalog::ATTR_DICT, 'version', CS_ACM360::PLUGIN_VERSION)
+        grp.set_attribute(Catalog::ATTR_DICT, 'version', CS_ACM360_BETA::PLUGIN_VERSION)
         grp.set_attribute(Catalog::ATTR_DICT, 'tray_json', JSON.generate(cfg))
         grp.set_attribute(Catalog::ATTR_DICT, 'unfold_json', JSON.generate(flat_data))
 
@@ -68,8 +68,8 @@ module CS_ACM360
       rows      = (grid_params['rows'] || 2).to_i.clamp(1, 10)
       total_w   = (grid_params['total_w_mm'] || 3600.0).to_f.clamp(200.0, 50000.0)
       total_h   = (grid_params['total_h_mm'] || 1800.0).to_f.clamp(200.0, 20000.0)
-      joint_mm  = (grid_params['joint_mm'] || 10.0).to_f.clamp(0.0, 50.0)
-      return_mm = (grid_params['return_mm'] || 50.0).to_f.clamp(15.0, 300.0)
+      joint_mm  = (grid_params['joint_mm'] || Settings.get('default_joint_mm')).to_f.clamp(0.0, 50.0)
+      return_mm = (grid_params['return_mm'] || Settings.get('default_return_mm')).to_f.clamp(15.0, 300.0)
       aba_mm    = (grid_params['aba_mm'] || 0.0).to_f.clamp(0.0, 100.0)
       color_hex = (grid_params['color_hex'] || '#27272A').to_s
       with_frame = grid_params['generate_frame'] != false
@@ -247,7 +247,7 @@ module CS_ACM360
                  else             'Cantoneira_Fixador_F003.skp'
                  end
 
-      skp_path = File.join(CS_ACM360::PLUGIN_DIR, 'BLOCOS', filename)
+      skp_path = File.join(CS_ACM360_BETA::PLUGIN_DIR, 'BLOCOS', filename)
       unless File.exist?(skp_path)
         UI.messagebox("Bloco 3D não encontrado: #{skp_path}")
         return nil
@@ -271,14 +271,18 @@ module CS_ACM360
       end
     end
 
+    # Espessura e fator de dobra vêm da chapa ACM ativa nas Configurações (M12),
+    # a não ser que a bandeja traga valores próprios; ficam gravados na bandeja.
     def self.normalize_tray_params(raw = {})
+      st = Settings.all
+      preset = st['acm_presets'].find { |p| p['id'] == raw['acm_preset'].to_s } || Settings.acm_preset
       edges_in = raw['edges'].is_a?(Hash) ? raw['edges'] : {}
       norm_edge = lambda do |side|
         e = edges_in[side] || edges_in[side.to_sym] || {}
         {
           'type'      => (e['type'] || raw['default_edge_type'] || 'dobra').to_s, # corte | dobra | dobra_aba | refile
-          'return_mm' => (e['return_mm'] || raw['return_mm'] || 50.0).to_f.clamp(0.0, 400.0),
-          'aba_mm'    => (e['aba_mm'] || raw['aba_mm'] || 20.0).to_f.clamp(0.0, 150.0),
+          'return_mm' => (e['return_mm'] || raw['return_mm'] || st['default_return_mm']).to_f.clamp(0.0, 400.0),
+          'aba_mm'    => (e['aba_mm'] || raw['aba_mm'] || st['default_aba_mm']).to_f.clamp(0.0, 150.0),
           'aba_side'  => (e['aba_side'] || 'dentro').to_s # dentro | fora
         }
       end
@@ -293,9 +297,11 @@ module CS_ACM360
         'origin_x_mm'    => (raw['origin_x_mm'] || 0.0).to_f,
         'origin_y_mm'    => (raw['origin_y_mm'] || 0.0).to_f,
         'origin_z_mm'    => (raw['origin_z_mm'] || 0.0).to_f,
-        'thickness_mm'   => (raw['thickness_mm'] || 3.0).to_f,
-        'bend_factor_mm' => (raw['bend_factor_mm'] || 1.5).to_f,
-        'fresa_type'     => (raw['fresa_type'] || 'V90').to_s,
+        'acm_preset'     => (raw['acm_preset'] || preset['id']).to_s,
+        'thickness_mm'   => (raw['thickness_mm'] || preset['thickness_mm']).to_f,
+        'bend_factor_mm' => (raw['bend_factor_mm'] || preset['bend_factor_mm']).to_f,
+        'refile_tab_mm'  => (raw['refile_tab_mm'] || st['refile_tab_mm']).to_f,
+        'fresa_type'     => (raw['fresa_type'] || st['fresa_type']).to_s,
         'corner_treatment'=> (raw['corner_treatment'] || 'esquadria').to_s, # esquadria | aberto | sobreposto
         'color_hex'      => (raw['color_hex'] || '#27272A').to_s,
         'dupla_face'     => raw['dupla_face'] != false,

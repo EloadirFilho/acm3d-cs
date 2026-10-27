@@ -81,6 +81,13 @@ flowchart TD
 - Plugin: diálogo de configurações e leitura/gravação dos padrões.
 - Web: mesma tela na aba ACM360 Studio, salva em `localStorage`; exporta/importa JSON de configurações.
 
+**Status (27/10/2026): entregue**
+- Plugin: `lib/settings.rb` (fábrica < máquina < modelo) e aba **5. Configurações**. Barra, serra, chapa, espaçamentos, fita e fator de dobra deixaram de ser fixos no código.
+- Fator de dobra cadastrado por fornecedor/espessura (padrões "Genérico 3 mm" = 1,5 e "Genérico 4 mm" = 2,0, a calibrar). Cada bandeja grava o fator usado na criação.
+- Ao mudar a barra ou a serra, as estruturas paramétricas do modelo são regeradas.
+- Web: `acm360-settings.js` + aba **4. Configurações**, com testes em `tests/acm360-settings.test.js`.
+- **Adiado**: arquivo de idiomas (uso só em pt-BR, interno) e "Verificar atualização" (o repositório ainda não tem *releases* e deve ficar privado).
+
 **Critérios de aceite**
 - Mudar a barra de 6000 para 6500 mm altera plano de barras, emendas e relatório sem reabrir o SketchUp.
 - Uma bitola criada pelo usuário aparece nos seletores do plugin e da web.

@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>CS ACM360 · Construtor ao Vivo & Planificador</title>
+  <title>CS ACM360 BETA · Construtor ao Vivo & Planificador</title>
   <style>
     :root {
       color-scheme: dark;
@@ -132,6 +132,20 @@
     thead { position: sticky; inset-block-start: 0; z-index: 1; background: #0F172A; }
     th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid #334155; }
     tbody th { position: sticky; inset-inline-start: 0; background: var(--surface); }
+    td input, td select {
+      width: 100%;
+      height: 26px;
+      padding: 0 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: #0F172A;
+      color: var(--text);
+      font-size: 12px;
+    }
+    .btn.small { height: 26px; padding: 0 10px; font-size: 11.5px; }
+    .btn.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+    .hint { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+    .logo-preview { max-height: 48px; max-width: 200px; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
     .footer {
       padding: 10px 16px;
       background: var(--surface);
@@ -145,7 +159,7 @@
 <body>
   <header class="top-bar">
     <div class="brand">
-      <span>CS ACM360 · SketchUp Studio</span>
+      <span>CS ACM360 BETA · SketchUp Studio</span>
       <span class="badge">v1.0.0 Híbrido ERP</span>
     </div>
     <div class="btn-row">
@@ -159,6 +173,7 @@
     <button type="button" class="tab-btn" data-tab="tray" onclick="CSStudio.switchTab('tray')">2. Bandeja ACM & Planificação</button>
     <button type="button" class="tab-btn" data-tab="facade" onclick="CSStudio.switchTab('facade')">3. Fachada em Malha (ACM + Estrutura)</button>
     <button type="button" class="tab-btn" data-tab="report" onclick="CSStudio.switchTab('report')">4. Relatório, Barras 1D & Emendas</button>
+    <button type="button" class="tab-btn" data-tab="settings" onclick="CSStudio.switchTab('settings')">5. Configurações</button>
   </nav>
 
   <main class="content">
@@ -247,8 +262,8 @@
         </div>
         <div class="grid-4" style="margin-top:10px;">
           <div class="field">
-            <label for="fBarMm">Barra Comercial (mm)</label>
-            <input type="number" id="fBarMm" value="6000" step="100">
+            <label>Barra Comercial</label>
+            <input type="text" id="fBarInfo" value="6000 mm" readonly title="Altere na aba 5. Configurações">
           </div>
           <div class="field">
             <label for="fSeamStrategy">Estratégia de Emendas</label>
@@ -327,6 +342,12 @@
             <input type="number" id="tBendFactor" value="1.5" step="0.1">
           </div>
         </div>
+        <div class="grid-4" style="margin-top:10px;">
+          <div class="field">
+            <label for="tPreset">Chapa ACM (Fornecedor / Espessura)</label>
+            <select id="tPreset" onchange="CSStudio.applyTrayPreset()"></select>
+          </div>
+        </div>
         <div class="btn-row" style="margin-top:12px;">
           <button type="button" class="btn primary" onclick="CSStudio.submitTray()">Criar Bandeja 3D no SketchUp</button>
           <button type="button" class="btn" onclick="CSStudio.callRuby('unfold_selected_3d')">Planificar Bandeja Selecionada no 3D</button>
@@ -393,6 +414,186 @@
         </div>
       </div>
     </section>
+
+    <!-- ABA 5: CONFIGURAÇÕES (M12) -->
+    <section class="panel" id="panel-settings">
+      <div class="card">
+        <h3>Geral · Barras e Serra</h3>
+        <div class="grid-4">
+          <div class="field">
+            <label for="sBarMm">Barra Comercial (mm)</label>
+            <input type="number" id="sBarMm" data-setting="bar_mm" min="1000" max="12000" step="100">
+          </div>
+          <div class="field">
+            <label for="sKerfMm">Espessura da Serra (mm)</label>
+            <input type="number" id="sKerfMm" data-setting="kerf_mm" min="0" max="15" step="0.1">
+          </div>
+          <div class="field">
+            <label for="sSeam">Estratégia de Emendas</label>
+            <select id="sSeam" data-setting="seam_strategy">
+              <option value="economia">Barra inteira + complemento</option>
+              <option value="iguais">Partes iguais</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="sColorMode">Modo de Cor 3D</label>
+            <select id="sColorMode" data-setting="color_mode">
+              <option value="tipo">Cor por Tipo de Tubo</option>
+              <option value="comprimento">Cor por Comprimento</option>
+              <option value="unica">Cor Única</option>
+            </select>
+          </div>
+        </div>
+        <p class="hint">Ao mudar a barra ou a serra, as estruturas do modelo são regeradas (emendas e plano de barras).</p>
+      </div>
+
+      <div class="card">
+        <h3>ACM · Chapa, Fresa e Bandejas</h3>
+        <div class="grid-4">
+          <div class="field">
+            <label for="sSheetW">Chapa Largura (mm)</label>
+            <input type="number" id="sSheetW" data-setting="acm_sheet_w_mm" step="10">
+          </div>
+          <div class="field">
+            <label for="sSheetH">Chapa Altura (mm)</label>
+            <input type="number" id="sSheetH" data-setting="acm_sheet_h_mm" step="10">
+          </div>
+          <div class="field">
+            <label for="sCore">Núcleo</label>
+            <select id="sCore" data-setting="acm_core">
+              <option value="PE">PE (Polietileno)</option>
+              <option value="FR">FR (Antichama)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="sFresa">Fresa do Vinco</label>
+            <select id="sFresa" data-setting="fresa_type">
+              <option value="V90">V 90°</option>
+              <option value="V135">V 135°</option>
+              <option value="U">Meia-cana (U)</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-4" style="margin-top:10px;">
+          <div class="field">
+            <label for="sReturn">Retorno Padrão (mm)</label>
+            <input type="number" id="sReturn" data-setting="default_return_mm">
+          </div>
+          <div class="field">
+            <label for="sAba">Aba Padrão (mm)</label>
+            <input type="number" id="sAba" data-setting="default_aba_mm">
+          </div>
+          <div class="field">
+            <label for="sJoint">Junta Padrão (mm)</label>
+            <input type="number" id="sJoint" data-setting="default_joint_mm">
+          </div>
+          <div class="field">
+            <label for="sRefile">Refile Padrão (mm)</label>
+            <input type="number" id="sRefile" data-setting="refile_tab_mm">
+          </div>
+        </div>
+        <div class="grid-4" style="margin-top:10px;">
+          <div class="field">
+            <label for="sNestGap">Espaço entre Peças (mm)</label>
+            <input type="number" id="sNestGap" data-setting="nest_gap_mm">
+          </div>
+          <div class="field">
+            <label for="sNestMargin">Margem da Chapa (mm)</label>
+            <input type="number" id="sNestMargin" data-setting="nest_margin_mm">
+          </div>
+          <div class="field">
+            <label for="sPreset">Chapa ACM Padrão</label>
+            <select id="sPreset" data-setting="acm_preset"></select>
+          </div>
+        </div>
+
+        <h3 style="margin-top:14px;">Fator de Dobra por Fornecedor / Espessura</h3>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Fornecedor / Descrição</th><th>Espessura (mm)</th><th>Fator de Dobra (mm)</th><th></th></tr></thead>
+            <tbody id="sPresetsBody"></tbody>
+          </table>
+        </div>
+        <div class="btn-row" style="margin-top:8px;">
+          <button type="button" class="btn small" onclick="CSStudio.addRow('acm_presets')">+ Fornecedor</button>
+        </div>
+        <p class="hint">Calibre o fator com uma peça de teste de cada fornecedor. Bandejas já criadas guardam o fator usado na criação.</p>
+      </div>
+
+      <div class="card">
+        <h3>Fixadores e Fita Dupla Face</h3>
+        <div class="grid-4">
+          <div class="field">
+            <label for="sFixSpacing">Espaçamento Fixadores (mm)</label>
+            <input type="number" id="sFixSpacing" data-setting="fastener_spacing_mm" step="10">
+          </div>
+          <div class="field">
+            <label for="sFixOffset">Recuo dos Cantos (mm)</label>
+            <input type="number" id="sFixOffset" data-setting="fastener_offset_mm" step="5">
+          </div>
+          <div class="field">
+            <label for="sTape">Fita Padrão</label>
+            <select id="sTape" data-setting="tape"></select>
+          </div>
+        </div>
+        <div class="table-wrapper" style="margin-top:10px;">
+          <table>
+            <thead><tr><th>Fita</th><th>Largura (mm)</th><th>Rolo (m)</th><th>Preço/rolo (R$)</th><th></th></tr></thead>
+            <tbody id="sTapesBody"></tbody>
+          </table>
+        </div>
+        <div class="btn-row" style="margin-top:8px;">
+          <button type="button" class="btn small" onclick="CSStudio.addRow('tapes')">+ Fita</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Bitolas · Preço por Metro e Perfis Próprios</h3>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Código</th><th>Nome</th><th>Família</th><th>L (mm)</th><th>A (mm)</th><th>Parede</th><th>Cor</th><th>R$/m</th><th></th></tr></thead>
+            <tbody id="sProfilesBody"></tbody>
+          </table>
+        </div>
+        <div class="btn-row" style="margin-top:8px;">
+          <button type="button" class="btn small" onclick="CSStudio.addRow('custom_profiles')">+ Bitola Própria</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Cabeçalho de Impressão</h3>
+        <div class="grid-4">
+          <div class="field">
+            <label for="sCompany">Empresa</label>
+            <input type="text" id="sCompany" data-setting="company_name">
+          </div>
+          <div class="field">
+            <label for="sPhone">Telefone</label>
+            <input type="text" id="sPhone" data-setting="company_phone">
+          </div>
+          <div class="field">
+            <label for="sEmail">E-mail</label>
+            <input type="text" id="sEmail" data-setting="company_email">
+          </div>
+          <div class="field">
+            <label for="sLogo">Logo (até 300 KB)</label>
+            <input type="file" id="sLogo" accept="image/png,image/jpeg,image/svg+xml" onchange="CSStudio.loadLogo(this)">
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:8px;">
+          <img id="sLogoPreview" class="logo-preview" alt="Logo da empresa" hidden>
+          <button type="button" class="btn small danger" id="sLogoRemove" onclick="CSStudio.removeLogo()" hidden>Remover logo</button>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn primary" onclick="CSStudio.saveSettings()">Salvar Configurações</button>
+        <button type="button" class="btn" onclick="CSStudio.callRuby('export_settings')">Exportar JSON</button>
+        <button type="button" class="btn" onclick="CSStudio.callRuby('import_settings')">Importar JSON</button>
+        <button type="button" class="btn danger" onclick="CSStudio.callRuby('reset_settings')">Restaurar Padrão</button>
+      </div>
+      <p class="hint">Salva nesta máquina e dentro do arquivo .skp. O JSON exportado também pode ser importado no painel web (ACM360 Studio).</p>
+    </section>
   </main>
 
   <footer class="footer">
@@ -418,19 +619,200 @@
           panels[j].classList.toggle('active', panels[j].id === 'panel-' + tabId);
         }
       },
+      settingsDraft: null,
+      settingsDirty: false,
+      trayDefaultsApplied: false,
       loadModelState: function(data) {
         this.state = data || {};
         if (data.initial_tab) this.switchTab(data.initial_tab);
-        var profiles = data.profiles || [];
-        var selC = document.getElementById('fProfileCorda');
-        var selT = document.getElementById('fProfileTrav');
-        if (selC && selC.options.length === 0 && profiles.length) {
-          profiles.forEach(function(p) {
-            selC.add(new Option(p.name, p.id, p.id === 5, p.id === 5));
-            selT.add(new Option(p.name, p.id, p.id === 3, p.id === 3));
-          });
+        var st = data.settings || {};
+        this.fillProfileSelect('fProfileCorda', data.profiles || [], 5);
+        this.fillProfileSelect('fProfileTrav', data.profiles || [], 3);
+        this.fillOptions('tPreset', st.acm_presets || [], document.getElementById('tPreset').value || st.acm_preset);
+        document.getElementById('fBarInfo').value = (st.bar_mm || 6000) + ' mm';
+        if (!this.trayDefaultsApplied && st.bar_mm) {
+          document.getElementById('fSeamStrategy').value = st.seam_strategy;
+          document.getElementById('fColorMode').value = st.color_mode;
+          document.getElementById('tReturnMm').value = st.default_return_mm;
+          document.getElementById('tAbaMm').value = st.default_aba_mm;
+          document.getElementById('gJoint').value = st.default_joint_mm;
+          document.getElementById('gReturn').value = st.default_return_mm;
+          this.applyTrayPreset();
+          this.trayDefaultsApplied = true;
+        }
+        if (!this.settingsDirty) {
+          this.settingsDraft = JSON.parse(JSON.stringify(st));
+          this.renderSettings();
         }
         this.renderReport();
+      },
+      esc: function(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function(c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      },
+      setStatus: function(msg) {
+        document.getElementById('statusText').textContent = msg;
+      },
+      fillProfileSelect: function(id, profiles, fallbackId) {
+        var sel = document.getElementById(id);
+        var current = sel.value || String(fallbackId);
+        sel.innerHTML = '';
+        profiles.forEach(function(p) {
+          var sel_ = String(p.id) === current;
+          sel.add(new Option(p.name, p.id, sel_, sel_));
+        });
+      },
+      fillOptions: function(id, items, selected) {
+        var sel = document.getElementById(id);
+        sel.innerHTML = '';
+        items.forEach(function(it) {
+          sel.add(new Option(it.name, it.id, it.id === selected, it.id === selected));
+        });
+      },
+      currentTrayPreset: function() {
+        var st = (this.state && this.state.settings) || {};
+        var id = document.getElementById('tPreset').value;
+        return (st.acm_presets || []).filter(function(p) { return p.id === id; })[0];
+      },
+      applyTrayPreset: function() {
+        var p = this.currentTrayPreset();
+        if (p) document.getElementById('tBendFactor').value = p.bend_factor_mm;
+      },
+
+      // ---------------- M12: Configurações ----------------
+      renderSettings: function() {
+        var d = this.settingsDraft || {};
+        var fields = document.querySelectorAll('#panel-settings [data-setting]');
+        this.fillOptions('sPreset', d.acm_presets || [], d.acm_preset);
+        this.fillOptions('sTape', d.tapes || [], d.tape);
+        for (var i = 0; i < fields.length; i++) {
+          var key = fields[i].getAttribute('data-setting');
+          if (d[key] !== undefined) fields[i].value = d[key];
+        }
+        var self = this;
+        var num = function(list, idx, field, val, step) {
+          return '<input type="number" step="' + (step || 'any') + '" data-list="' + list + '" data-idx="' + idx +
+            '" data-field="' + field + '" value="' + self.esc(val) + '">';
+        };
+        var txt = function(list, idx, field, val) {
+          return '<input type="text" data-list="' + list + '" data-idx="' + idx + '" data-field="' + field + '" value="' + self.esc(val) + '">';
+        };
+        var del = function(list, idx) {
+          return '<button type="button" class="btn small danger" onclick="CSStudio.removeRow(\'' + list + '\',' + idx + ')">×</button>';
+        };
+
+        document.getElementById('sPresetsBody').innerHTML = (d.acm_presets || []).map(function(p, i) {
+          return '<tr><td>' + txt('acm_presets', i, 'name', p.name) + '</td><td>' + num('acm_presets', i, 'thickness_mm', p.thickness_mm, '0.5') +
+            '</td><td>' + num('acm_presets', i, 'bend_factor_mm', p.bend_factor_mm, '0.1') + '</td><td>' + del('acm_presets', i) + '</td></tr>';
+        }).join('');
+
+        document.getElementById('sTapesBody').innerHTML = (d.tapes || []).map(function(t, i) {
+          return '<tr><td>' + txt('tapes', i, 'name', t.name) + '</td><td>' + num('tapes', i, 'width_mm', t.width_mm) +
+            '</td><td>' + num('tapes', i, 'roll_m', t.roll_m) + '</td><td>' + num('tapes', i, 'price', t.price, '0.01') +
+            '</td><td>' + del('tapes', i) + '</td></tr>';
+        }).join('');
+
+        var prices = d.profile_prices || {};
+        var priceInput = function(id) {
+          return '<input type="number" step="0.01" min="0" data-price-id="' + id + '" value="' + self.esc(prices[String(id)] || '') + '">';
+        };
+        var builtIn = ((this.state && this.state.profiles) || []).filter(function(p) { return !p.custom; });
+        var html = builtIn.map(function(p) {
+          return '<tr><td>' + self.esc(p.code) + '</td><td>' + self.esc(p.name) + '</td><td>' + self.esc(p.family) + '</td><td>' + p.w_mm +
+            '</td><td>' + p.h_mm + '</td><td>' + p.wall_mm + '</td><td><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:' +
+            self.esc(p.color) + '"></span></td><td>' + priceInput(p.id) + '</td><td></td></tr>';
+        });
+        (d.custom_profiles || []).forEach(function(p, i) {
+          var fam = '<select data-list="custom_profiles" data-idx="' + i + '" data-field="family">' +
+            ['metalon', 'aluminio', 'outro'].map(function(f) {
+              return '<option value="' + f + '"' + (p.family === f ? ' selected' : '') + '>' + f + '</option>';
+            }).join('') + '</select>';
+          html.push('<tr><td>' + txt('custom_profiles', i, 'code', p.code) + '</td><td>' + txt('custom_profiles', i, 'name', p.name) +
+            '</td><td>' + fam + '</td><td>' + num('custom_profiles', i, 'w_mm', p.w_mm) + '</td><td>' + num('custom_profiles', i, 'h_mm', p.h_mm) +
+            '</td><td>' + num('custom_profiles', i, 'wall_mm', p.wall_mm, '0.1') +
+            '</td><td><input type="color" data-list="custom_profiles" data-idx="' + i + '" data-field="color" value="' + self.esc(p.color || '#64748B') + '"></td><td>' +
+            priceInput(p.id) + '</td><td>' + del('custom_profiles', i) + '</td></tr>');
+        });
+        document.getElementById('sProfilesBody').innerHTML = html.join('');
+
+        var logo = document.getElementById('sLogoPreview');
+        logo.hidden = !d.company_logo;
+        document.getElementById('sLogoRemove').hidden = !d.company_logo;
+        if (d.company_logo) logo.src = d.company_logo;
+      },
+      onSettingsInput: function(el) {
+        var d = this.settingsDraft;
+        if (!d) return;
+        this.settingsDirty = true;
+        if (el.hasAttribute('data-price-id')) {
+          d.profile_prices = d.profile_prices || {};
+          d.profile_prices[el.getAttribute('data-price-id')] = Number(el.value) || 0;
+        } else if (el.hasAttribute('data-list')) {
+          var item = d[el.getAttribute('data-list')][Number(el.getAttribute('data-idx'))];
+          item[el.getAttribute('data-field')] = el.type === 'number' ? Number(el.value) : el.value;
+          if (el.getAttribute('data-field') === 'name') {
+            this.fillOptions('sPreset', d.acm_presets, document.getElementById('sPreset').value);
+            this.fillOptions('sTape', d.tapes, document.getElementById('sTape').value);
+          }
+        } else if (el.hasAttribute('data-setting')) {
+          d[el.getAttribute('data-setting')] = el.type === 'number' ? Number(el.value) : el.value;
+        }
+      },
+      addRow: function(list) {
+        var d = this.settingsDraft;
+        var stamp = String(Date.now());
+        if (list === 'acm_presets') {
+          d.acm_presets.push({ id: 'p_' + stamp, name: 'Fornecedor ' + (d.acm_presets.length + 1), thickness_mm: 3, bend_factor_mm: 1.5 });
+        } else if (list === 'tapes') {
+          d.tapes.push({ id: 't_' + stamp, name: 'Fita ' + (d.tapes.length + 1), width_mm: 19, roll_m: 33, price: 0 });
+        } else if (list === 'custom_profiles') {
+          var maxId = 99;
+          d.custom_profiles.forEach(function(p) { maxId = Math.max(maxId, Number(p.id) || 0); });
+          d.custom_profiles.push({ id: maxId + 1, code: 'X' + (maxId + 1), name: 'Bitola própria', family: 'metalon', w_mm: 30, h_mm: 30, wall_mm: 1.2, color: '#64748B' });
+        }
+        this.settingsDirty = true;
+        this.renderSettings();
+      },
+      removeRow: function(list, idx) {
+        var d = this.settingsDraft;
+        if (list !== 'custom_profiles' && d[list].length <= 1) {
+          this.setStatus('É preciso manter pelo menos um item.');
+          return;
+        }
+        var removed = d[list].splice(idx, 1)[0];
+        if (list === 'custom_profiles' && d.profile_prices) delete d.profile_prices[String(removed.id)];
+        if (list === 'acm_presets' && removed.id === d.acm_preset) d.acm_preset = d.acm_presets[0].id;
+        if (list === 'tapes' && removed.id === d.tape) d.tape = d.tapes[0].id;
+        this.settingsDirty = true;
+        this.renderSettings();
+      },
+      loadLogo: function(input) {
+        var file = input.files && input.files[0];
+        var self = this;
+        if (!file) return;
+        if (file.size > 300 * 1024) {
+          this.setStatus('Logo maior que 300 KB. Reduza a imagem e tente de novo.');
+          input.value = '';
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function() {
+          self.settingsDraft.company_logo = reader.result;
+          self.settingsDirty = true;
+          self.renderSettings();
+        };
+        reader.readAsDataURL(file);
+      },
+      removeLogo: function() {
+        this.settingsDraft.company_logo = '';
+        this.settingsDirty = true;
+        document.getElementById('sLogo').value = '';
+        this.renderSettings();
+      },
+      saveSettings: function() {
+        this.settingsDirty = false;
+        this.callRuby('save_settings', JSON.stringify(this.settingsDraft));
       },
       submitFrame: function(updateSel) {
         var payload = {
@@ -446,7 +828,6 @@
           trav_v_count: Number(document.getElementById('fTravV').value || 0),
           trav_h_count: Number(document.getElementById('fTravH').value || 0),
           trav_align: document.getElementById('fTravAlign').value,
-          bar_mm: Number(document.getElementById('fBarMm').value || 6000),
           seam_strategy: document.getElementById('fSeamStrategy').value,
           color_mode: document.getElementById('fColorMode').value,
           update_selected: !!updateSel
@@ -462,7 +843,9 @@
           default_edge_type: document.getElementById('tEdgeType').value,
           return_mm: Number(document.getElementById('tReturnMm').value),
           aba_mm: Number(document.getElementById('tAbaMm').value),
-          bend_factor_mm: Number(document.getElementById('tBendFactor').value)
+          bend_factor_mm: Number(document.getElementById('tBendFactor').value),
+          acm_preset: document.getElementById('tPreset').value,
+          thickness_mm: (this.currentTrayPreset() || {}).thickness_mm
         };
         this.callRuby('create_or_update_tray', JSON.stringify(payload));
       },
@@ -485,7 +868,7 @@
         var sumEl = document.getElementById('reportSummaryText');
         if (sumEl) {
           sumEl.textContent = 'Tubos: ' + (bp.total_pieces || 0) + ' pçs · Total Linear: ' +
-            (bp.total_linear_m || 0) + ' m · Barras (6m): ' + (bp.total_bars || 0) +
+            (bp.total_linear_m || 0) + ' m · Barras (' + (bp.bar_mm || 6000) + ' mm): ' + (bp.total_bars || 0) +
             ' · Bandejas ACM: ' + trays.length;
         }
         var tbody = document.getElementById('reportTableBody');
@@ -506,6 +889,12 @@
       }
     };
     window.addEventListener('DOMContentLoaded', function() {
+      var panel = document.getElementById('panel-settings');
+      var handler = function(ev) {
+        if (ev.target.id !== 'sLogo') CSStudio.onSettingsInput(ev.target);
+      };
+      panel.addEventListener('input', handler);
+      panel.addEventListener('change', handler);
       CSStudio.callRuby('ready');
     });
   </script>

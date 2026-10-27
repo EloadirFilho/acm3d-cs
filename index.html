@@ -366,6 +366,9 @@
               <button type="button" class="submode-pill" id="tabAcmModeBOM" aria-pressed="false">
                 3. Materiais, VHB &amp; Fixadores
               </button>
+              <button type="button" class="submode-pill" id="tabAcmModeSettings" aria-pressed="false">
+                4. Configurações
+              </button>
             </div>
 
             <!-- PAINEL 1: ESTRUTURAS METÁLICAS (A002 CORTE RETO / A003 MEIA-ESQUADRIA) -->
@@ -429,7 +432,7 @@
                   <input type="number" id="inpAcmTravH" value="1" min="0" max="20">
                 </div>
                 <div class="acm-field">
-                  <label for="selAcmBarStrategy">EMENDAS (6000MM)</label>
+                  <label for="selAcmBarStrategy">EMENDAS (<span id="lblAcmBarMm">6000</span>MM)</label>
                   <select id="selAcmBarStrategy">
                     <option value="economia">Barra Inteira + Compl.</option>
                     <option value="iguais">Partes Iguais</option>
@@ -516,6 +519,13 @@
                 </div>
               </div>
 
+              <div class="acm-form-grid-2">
+                <div class="acm-field">
+                  <label for="selAcmPreset">CHAPA ACM (FORNECEDOR / ESPESSURA)</label>
+                  <select id="selAcmPreset"></select>
+                </div>
+              </div>
+
               <div class="acm-checkbox-row">
                 <label for="chkAcmSyncJuntas">
                   <input type="checkbox" id="chkAcmSyncJuntas" class="visually-hidden" checked>
@@ -544,11 +554,7 @@
               <div class="acm-form-grid-2">
                 <div class="acm-field">
                   <label for="selAcmVhbType">FITA DUPLA-FACE ESTRUTURAL</label>
-                  <select id="selAcmVhbType">
-                    <option value="3M_VHB_1.1" selected>3M VHB 4910 / GBN (1.1 mm)</option>
-                    <option value="3M_VHB_1.6">3M VHB 4941 (1.6 mm)</option>
-                    <option value="3M_VHB_2.0">3M VHB 4955 (2.0 mm)</option>
-                  </select>
+                  <select id="selAcmVhbType"></select>
                 </div>
                 <div class="acm-field">
                   <label for="selAcmSealant">SELANTE DE JUNTAS</label>
@@ -566,6 +572,147 @@
                 <div id="acmBomSummaryBox" style="background: rgba(255,255,255,0.04); border: 1px solid var(--border-subtle, #333); border-radius: 8px; padding: 12px; font-size: 0.85rem; line-height: 1.6; color: var(--text-secondary, #ccc);">
                   Carregando resumo de materiais...
                 </div>
+              </div>
+            </div>
+
+            <!-- PAINEL 4: CONFIGURAÇÕES (M12) — mesmo JSON do plugin SketchUp -->
+            <div id="acmPanelSettingsControls" class="acm360-form-scroll" hidden>
+              <span class="field-group-label">GERAL · BARRAS E SERRA</span>
+              <div class="acm-form-grid-2">
+                <div class="acm-field">
+                  <label for="setAcmBarMm">BARRA COMERCIAL (MM)</label>
+                  <input type="number" id="setAcmBarMm" data-acm-setting="bar_mm" min="1000" max="12000" step="100">
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmKerf">ESPESSURA DA SERRA (MM)</label>
+                  <input type="number" id="setAcmKerf" data-acm-setting="kerf_mm" min="0" max="15" step="0.1">
+                </div>
+              </div>
+
+              <span class="field-group-label">ACM · CHAPA E PADRÕES DE BANDEJA</span>
+              <div class="acm-form-grid-3">
+                <div class="acm-field">
+                  <label for="setAcmSheetW">CHAPA LARG. (MM)</label>
+                  <input type="number" id="setAcmSheetW" data-acm-setting="acm_sheet_w_mm" step="10">
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmSheetH">CHAPA ALT. (MM)</label>
+                  <input type="number" id="setAcmSheetH" data-acm-setting="acm_sheet_h_mm" step="10">
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmCore">NÚCLEO</label>
+                  <select id="setAcmCore" data-acm-setting="acm_core">
+                    <option value="PE">PE</option>
+                    <option value="FR">FR (Antichama)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="acm-form-grid-3">
+                <div class="acm-field">
+                  <label for="setAcmReturn">RETORNO PADRÃO</label>
+                  <input type="number" id="setAcmReturn" data-acm-setting="default_return_mm">
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmAba">ABA PADRÃO</label>
+                  <input type="number" id="setAcmAba" data-acm-setting="default_aba_mm">
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmJoint">JUNTA PADRÃO</label>
+                  <input type="number" id="setAcmJoint" data-acm-setting="default_joint_mm">
+                </div>
+              </div>
+              <div class="acm-form-grid-3">
+                <div class="acm-field">
+                  <label for="setAcmRefile">REFILE PADRÃO</label>
+                  <input type="number" id="setAcmRefile" data-acm-setting="refile_tab_mm">
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmFresa">FRESA PADRÃO</label>
+                  <select id="setAcmFresa" data-acm-setting="fresa_type">
+                    <option value="V90">V 90°</option>
+                    <option value="V135">V 135°</option>
+                    <option value="U">Meia-cana (U)</option>
+                  </select>
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmPresetDefault">CHAPA PADRÃO</label>
+                  <select id="setAcmPresetDefault" data-acm-setting="acm_preset"></select>
+                </div>
+              </div>
+
+              <span class="field-group-label">FATOR DE DOBRA POR FORNECEDOR / ESPESSURA</span>
+              <div class="table-wrapper acm-settings-table" tabindex="0" role="region" aria-label="Fator de dobra por fornecedor">
+                <table>
+                  <thead><tr><th>Fornecedor</th><th>Esp. (mm)</th><th>Fator (mm)</th><th></th></tr></thead>
+                  <tbody id="setAcmPresetsBody"></tbody>
+                </table>
+              </div>
+              <button type="button" class="acm-action-btn secondary" data-acm-add="acm_presets">+ Fornecedor</button>
+
+              <span class="field-group-label">FIXADORES E FITA DUPLA FACE</span>
+              <div class="acm-form-grid-3">
+                <div class="acm-field">
+                  <label for="setAcmFixSpacing">ESPAÇ. FIXADORES</label>
+                  <input type="number" id="setAcmFixSpacing" data-acm-setting="fastener_spacing_mm" step="10">
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmFixOffset">RECUO CANTOS</label>
+                  <input type="number" id="setAcmFixOffset" data-acm-setting="fastener_offset_mm" step="5">
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmTapeDefault">FITA PADRÃO</label>
+                  <select id="setAcmTapeDefault" data-acm-setting="tape"></select>
+                </div>
+              </div>
+              <div class="table-wrapper acm-settings-table" tabindex="0" role="region" aria-label="Cadastro de fitas dupla face">
+                <table>
+                  <thead><tr><th>Fita</th><th>Larg. (mm)</th><th>Rolo (m)</th><th>R$/rolo</th><th></th></tr></thead>
+                  <tbody id="setAcmTapesBody"></tbody>
+                </table>
+              </div>
+              <button type="button" class="acm-action-btn secondary" data-acm-add="tapes">+ Fita</button>
+
+              <span class="field-group-label">BITOLAS · PREÇO POR METRO E PERFIS PRÓPRIOS</span>
+              <div class="table-wrapper acm-settings-table" tabindex="0" role="region" aria-label="Bitolas e preço por metro">
+                <table>
+                  <thead><tr><th>Bitola</th><th>R$/m</th><th>L × A × Parede (mm)</th><th></th></tr></thead>
+                  <tbody id="setAcmProfilesBody"></tbody>
+                </table>
+              </div>
+              <button type="button" class="acm-action-btn secondary" data-acm-add="custom_profiles">+ Bitola Própria</button>
+
+              <span class="field-group-label">CABEÇALHO DE IMPRESSÃO</span>
+              <div class="acm-form-grid-3">
+                <div class="acm-field">
+                  <label for="setAcmCompany">EMPRESA</label>
+                  <input type="text" id="setAcmCompany" data-acm-setting="company_name">
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmPhone">TELEFONE</label>
+                  <input type="text" id="setAcmPhone" data-acm-setting="company_phone">
+                </div>
+                <div class="acm-field">
+                  <label for="setAcmEmail">E-MAIL</label>
+                  <input type="text" id="setAcmEmail" data-acm-setting="company_email">
+                </div>
+              </div>
+              <div class="acm-form-grid-2">
+                <label class="acm-action-btn secondary" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
+                  🖼️ Logo (até 300 KB)
+                  <input type="file" id="setAcmLogo" accept="image/png,image/jpeg,image/svg+xml" hidden>
+                </label>
+                <button type="button" class="acm-action-btn secondary" id="btnAcmLogoRemove" hidden>Remover logo</button>
+              </div>
+              <img id="imgAcmLogoPreview" class="acm-logo-preview" alt="Logo da empresa" hidden>
+
+              <div class="acm-btn-row">
+                <button type="button" class="acm-action-btn" id="btnAcmSettingsSave">💾 Salvar</button>
+                <button type="button" class="acm-action-btn secondary" id="btnAcmSettingsExport">📤 Exportar JSON</button>
+                <label class="acm-action-btn secondary" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
+                  📥 Importar JSON
+                  <input type="file" id="inpAcmSettingsImport" accept=".json" hidden>
+                </label>
+                <button type="button" class="acm-action-btn secondary" id="btnAcmSettingsReset">↺ Padrão</button>
               </div>
             </div>
 
@@ -729,6 +876,7 @@
 
   </div>
 
+  <script src="acm360-settings.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

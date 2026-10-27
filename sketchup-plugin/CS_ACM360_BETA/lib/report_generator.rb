@@ -6,7 +6,7 @@
 
 require 'csv'
 
-module CS_ACM360
+module CS_ACM360_BETA
   module ReportGenerator
     extend self
 
@@ -88,11 +88,13 @@ module CS_ACM360
         # SEÇÃO 1: RESUMO DE MATERIAIS
         f.puts "--- RESUMO GERAL DE COMPRA E PRODUÇÃO ---"
         f.puts "Item;Especificação;Quantidade;Unidade"
-        f.puts "Barras de 6000mm;Metalon / Alumínio;#{data[:bar_packing][:total_bars]};un (6m)"
+        bar_mm = Settings.get('bar_mm').round
+        f.puts "Barras de #{bar_mm}mm;Metalon / Alumínio;#{data[:bar_packing][:total_bars]};un"
         f.puts "Total Metros Lineares;Tubos Estruturais;#{data[:bar_packing][:total_length_m]};m"
         f.puts "Aproveitamento de Barras;Eficiência Linear;#{data[:bar_packing][:efficiency_pct]}%;%"
         f.puts "Área Total de ACM;Chapas Planificadas;#{data[:summary][:total_acm_area_m2]};m²"
-        f.puts "Fita 3M VHB;Dupla-face Estrutural (33m);#{data[:vhb_data][:rolls_needed]};rolos (#{data[:vhb_data][:total_tape_meters]} m)"
+        vhb = data[:vhb_data]
+        f.puts "#{vhb[:tape_name]};Dupla-face Estrutural (rolo #{vhb[:roll_m]}m);#{vhb[:rolls_needed]};rolos (#{vhb[:total_tape_meters]} m)"
         f.puts "Primer 3M AP111 / 94;Promotor de Adesão (250ml);#{data[:vhb_data][:primer_cans]};frascos"
         f.puts "Cantoneiras de Fixação;Cantoneira Fixador (F003);#{data[:summary][:cantoneiras_count]};un"
         f.puts "Parafusos Autobrocantes;4.2 x 19mm c/ Vedação;#{data[:summary][:screws_count]};un"
@@ -100,7 +102,7 @@ module CS_ACM360
 
         # SEÇÃO 2: LISTA DETALHADA DE CORTE DE TUBOS (SERRA)
         f.puts "--- LISTA DE CORTE DE TUBOS (SERRA) ---"
-        f.puts "Barra 6m;Seq;Perfil;Função;Comprimento (mm);Corte Esq;Corte Dir;Peso Estimado (kg)"
+        f.puts "Barra;Seq;Perfil;Função;Comprimento (mm);Corte Esq;Corte Dir;Peso Estimado (kg)"
         bar_idx = 1
         data[:bar_packing][:bars].each do |bar|
           bar[:cuts].each_with_index do |cut, c_idx|
@@ -188,7 +190,7 @@ module CS_ACM360
     end
 
     # Empacotamento 1D (First-Fit Decreasing)
-    def calculate_bar_nesting(tubes, bar_len = 6000.0, kerf = 4.0)
+    def calculate_bar_nesting(tubes, bar_len = Settings.get('bar_mm'), kerf = Settings.get('kerf_mm'))
       return { total_bars: 0, total_length_m: 0, efficiency_pct: 100, bars: [] } if tubes.empty?
 
       sorted = tubes.sort_by { |t| -t[:length_mm] }

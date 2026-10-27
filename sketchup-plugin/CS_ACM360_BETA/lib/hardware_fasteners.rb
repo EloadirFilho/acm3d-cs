@@ -4,14 +4,11 @@
 # Implementa os Módulos M3 (Colagem / Fita VHB) e M4 (Fixadores Avançados)
 # ==============================================================================
 
-module CS_ACM360
+module CS_ACM360_BETA
   module HardwareFasteners
     extend self
 
-    # Regras padrão de distribuição
-    DEFAULT_FASTENER_SPACING_MM = 400.0 # Espaçamento padrão entre cantoneiras (mm)
-    DEFAULT_CORNER_OFFSET_MM   = 70.0  # Distância do canto até o primeiro fixador (mm)
-    VHB_ROLL_LENGTH_METERS     = 33.0  # Rolo padrão de fita 3M VHB (33 metros)
+    # Espaçamento, recuo dos cantos e fita/rolo vêm das Configurações (M12)
 
     # --------------------------------------------------------------------------
     # M3: Cálculo de Colagem e Fita Dupla-Face 3M VHB
@@ -43,7 +40,8 @@ module CS_ACM360
       end
 
       total_tape_m = (total_perimeter_mm + total_stiffener_mm) / 1000.0
-      rolls_needed = (total_tape_m / VHB_ROLL_LENGTH_METERS).ceil
+      tape = Settings.tape
+      rolls_needed = (total_tape_m / tape['roll_m'].to_f).ceil
       
       # Primer 3M AP111 / 94 (aprox. 1 frasco de 250ml para cada 100 metros lineares)
       primer_cans = [(total_tape_m / 100.0).ceil, 1].max
@@ -54,6 +52,9 @@ module CS_ACM360
         stiffener_meters: (total_stiffener_mm / 1000.0).round(2),
         total_tape_meters: total_tape_m.round(2),
         rolls_needed: rolls_needed,
+        tape_name: tape['name'],
+        roll_m: tape['roll_m'],
+        tape_cost: (rolls_needed * tape['price'].to_f).round(2),
         primer_cans: primer_cans
       }
     end
@@ -64,15 +65,15 @@ module CS_ACM360
     def distribute_fasteners_on_tray(tray_group, opts = {})
       return unless tray_group && tray_group.valid?
 
-      spacing = (opts[:spacing] || DEFAULT_FASTENER_SPACING_MM).to_f.mm
-      offset  = (opts[:offset]  || DEFAULT_CORNER_OFFSET_MM).to_f.mm
+      spacing = (opts[:spacing] || Settings.get('fastener_spacing_mm')).to_f.mm
+      offset  = (opts[:offset]  || Settings.get('fastener_offset_mm')).to_f.mm
       fastener_type = opts[:fastener_type] || 'F003' # Cantoneira_Fixador_F003
 
       w = tray_group.get_attribute(Catalog::ATTR_DICT, 'width', 1000.0).to_f.mm
       h = tray_group.get_attribute(Catalog::ATTR_DICT, 'height', 600.0).to_f.mm
       fold = tray_group.get_attribute(Catalog::ATTR_DICT, 'fold_depth', 25.0).to_f.mm
 
-      skp_path = File.join(CS_ACM360::PLUGIN_DIR, 'BLOCOS', "#{fastener_type_filename(fastener_type)}.skp")
+      skp_path = File.join(CS_ACM360_BETA::PLUGIN_DIR, 'BLOCOS', "#{fastener_type_filename(fastener_type)}.skp")
       unless File.exist?(skp_path)
         UI.messagebox("Bloco de fixador não encontrado:\n#{skp_path}")
         return

@@ -1883,6 +1883,92 @@
     border-block-start: 1px solid var(--border-subtle);
   }
 
+  /* M12 · 4 abas no Studio: cabem lado a lado sem cortar o texto */
+  .acm360-controls-card .submode-bar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .acm360-controls-card .submode-pill {
+    min-inline-size: 0;
+    padding-inline: 6px;
+    font-size: 0.74rem;
+  }
+
+  /* Campos encolhem com a coluna em vez de transbordar */
+  .acm360-form-scroll .acm-form-grid-2 > *,
+  .acm360-form-scroll .acm-form-grid-3 > *,
+  .acm360-form-scroll .acm-btn-row > * {
+    min-inline-size: 0;
+  }
+
+  .acm360-form-scroll .acm-field input,
+  .acm360-form-scroll .acm-field select {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+
+  /* M12 · tabelas editáveis de Configurações */
+  .acm-settings-table {
+    flex-shrink: 0;
+    overflow: auto;
+    max-inline-size: 100%;
+    max-block-size: 220px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-card);
+  }
+
+  .acm-settings-table table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+
+  .acm-settings-table th,
+  .acm-settings-table td {
+    padding: 4px 6px;
+    text-align: start;
+    border-block-end: 1px solid var(--border-subtle);
+  }
+
+  .acm-settings-table thead th {
+    position: sticky;
+    inset-block-start: 0;
+    background: var(--surface-subtle);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+  }
+
+  .acm-settings-table input,
+  .acm-settings-table select {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-inline-size: 56px;
+    min-block-size: 32px;
+    padding-inline: 6px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    background: var(--surface-subtle);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .acm-settings-table input[type="color"] {
+    padding: 2px;
+  }
+
+  .acm-logo-preview {
+    max-block-size: 48px;
+    max-inline-size: 200px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: #ffffff;
+  }
+
   .acm-btn-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

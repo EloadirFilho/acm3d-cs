@@ -1,12 +1,12 @@
 # encoding: UTF-8
 # ==============================================================================
-# CS_ACM360::Catalog
+# CS_ACM360_BETA::Catalog
 # Catálogo fiel das 21 bitolas de tubos (Metalon e Alumínio), materiais,
 # cores por tipo/comprimento e padrões de chapas/fresas de ACM.
 # Extraído das especificações de referência A002_params e A003_params.
 # ==============================================================================
 
-module CS_ACM360
+module CS_ACM360_BETA
   module Catalog
     ATTR_DICT = 'CS_ACM360_DATA'.freeze
 
@@ -63,27 +63,54 @@ module CS_ACM360
       { id: 'amarelo_ouro',   name: 'ACM Amarelo Ouro',   hex: '#EAB308' }
     ].freeze
 
+    # Padrões de fábrica do M12 (sobrescritos pela máquina e pelo modelo em Settings).
+    # Mesmo formato do JSON CS_ACM360_SETTINGS_V1 usado pelo painel web.
     DEFAULT_SETTINGS = {
-      'bar_mm'             => 6000.0,
-      'kerf_mm'            => 3.0,
-      'seam_strategy'      => 'economia', # economia | inteira | iguais
-      'acm_sheet_w_mm'     => 5000.0,
-      'acm_sheet_h_mm'     => 1220.0,
-      'acm_thickness_mm'   => 3.0,
-      'acm_foil_mm'        => 0.21,
-      'acm_core'           => 'PE',
-      'fresa_type'         => 'V90',
-      'fresa_base_mm'      => 2.0,
-      'bend_factor_mm'     => 1.5,
-      'refile_tab_mm'      => 15.0,
-      'default_return_mm'  => 50.0,
-      'default_aba_mm'     => 20.0,
-      'default_joint_mm'   => 10.0,
-      'color_mode'         => 'tipo' # tipo | comprimento | unica
+      # Geral / Estruturas
+      'bar_mm'              => 6000.0,
+      'kerf_mm'             => 3.0,
+      'seam_strategy'       => 'economia', # economia | iguais
+      'color_mode'          => 'tipo',     # tipo | comprimento | unica
+      # ACM
+      'acm_sheet_w_mm'      => 5000.0,
+      'acm_sheet_h_mm'      => 1220.0,
+      'acm_core'            => 'PE',       # PE | FR
+      'fresa_type'          => 'V90',      # V90 | V135 | U
+      'refile_tab_mm'       => 15.0,
+      'default_return_mm'   => 50.0,
+      'default_aba_mm'      => 20.0,
+      'default_joint_mm'    => 10.0,
+      'nest_gap_mm'         => 8.0,
+      'nest_margin_mm'      => 10.0,
+      # Fator de dobra por fornecedor/espessura (calibrar com peça de teste)
+      'acm_preset'          => 'generico_3',
+      'acm_presets'         => [
+        { 'id' => 'generico_3', 'name' => 'Genérico 3 mm', 'thickness_mm' => 3.0, 'bend_factor_mm' => 1.5 },
+        { 'id' => 'generico_4', 'name' => 'Genérico 4 mm', 'thickness_mm' => 4.0, 'bend_factor_mm' => 2.0 }
+      ],
+      # Fixadores
+      'fastener_spacing_mm' => 400.0,
+      'fastener_offset_mm'  => 70.0,
+      # Fitas dupla face
+      'tape'                => 'vhb_4910',
+      'tapes'               => [
+        { 'id' => 'vhb_4910', 'name' => '3M VHB 4910 (1,1 mm)', 'width_mm' => 19.0, 'roll_m' => 33.0, 'price' => 0.0 },
+        { 'id' => 'vhb_4941', 'name' => '3M VHB 4941 (1,6 mm)', 'width_mm' => 19.0, 'roll_m' => 33.0, 'price' => 0.0 },
+        { 'id' => 'vhb_4955', 'name' => '3M VHB 4955 (2,0 mm)', 'width_mm' => 19.0, 'roll_m' => 33.0, 'price' => 0.0 }
+      ],
+      # Bitolas próprias (id >= 100) e preço por metro de qualquer bitola ({ "id" => R$/m })
+      'custom_profiles'     => [],
+      'profile_prices'      => {},
+      # Cabeçalho de impressão
+      'company_name'        => 'CS Comunicação',
+      'company_phone'       => '',
+      'company_email'       => '',
+      'company_logo'        => '' # data URI, até 300 KB
     }.freeze
 
     def self.find_profile(id_or_code)
-      TUBE_PROFILES.find { |p| p[:id].to_s == id_or_code.to_s || p[:code].to_s.casecmp(id_or_code.to_s).zero? || p[:name] == id_or_code.to_s } || TUBE_PROFILES[4]
+      all = defined?(Settings) ? Settings.profiles : TUBE_PROFILES
+      all.find { |p| p[:id].to_s == id_or_code.to_s || p[:code].to_s.casecmp(id_or_code.to_s).zero? || p[:name] == id_or_code.to_s } || TUBE_PROFILES[4]
     end
 
     # Retorna [largura_frontal_mm, profundidade_y_mm] conforme orientação:
