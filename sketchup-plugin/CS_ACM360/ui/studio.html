@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>CS ACM360 · Construtor ao Vivo & Planificador</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --brand-color: #2563EB;
+      --bg: #0F172A;
+      --surface: #1E293B;
+      --surface-alt: #334155;
+      --border: #475569;
+      --text: #F8FAFC;
+      --muted: #94A3B8;
+      --danger: #EF4444;
+      --success: #10B981;
+      --warning: #F59E0B;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      accent-color: var(--brand-color);
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 14px; }
+    .badge {
+      background: #1D4ED8;
+      color: #fff;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 99px;
+      font-weight: 700;
+    }
+    .tabs {
+      display: flex;
+      gap: 6px;
+      padding: 8px 16px;
+      background: #131C31;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: var(--brand-color);
+      color: #fff;
+      border-color: var(--brand-color);
+    }
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .panel { display: none; flex-direction: column; gap: 12px; }
+    .panel.active { display: flex; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .card h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+    .field input, .field select {
+      height: 30px;
+      padding: 0 8px;
+      border-radius: 5px;
+      border: 1px solid var(--border);
+      background: #0F172A;
+      color: var(--text);
+      font-size: 12.5px;
+    }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .btn {
+      height: 32px;
+      padding: 0 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface-alt);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn.primary { background: var(--brand-color); border-color: var(--brand-color); color: #fff; }
+    .btn.success { background: var(--success); border-color: var(--success); color: #fff; }
+    .table-wrapper {
+      overflow: auto;
+      max-inline-size: 100%;
+      max-block-size: 280px;
+      container-type: inline-size;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12px; }
+    thead { position: sticky; inset-block-start: 0; z-index: 1; background: #0F172A; }
+    th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid #334155; }
+    tbody th { position: sticky; inset-inline-start: 0; background: var(--surface); }
+    .footer {
+      padding: 10px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <header class="top-bar">
+    <div class="brand">
+      <span>CS ACM360 · SketchUp Studio</span>
+      <span class="badge">v1.0.0 Híbrido ERP</span>
+    </div>
+    <div class="btn-row">
+      <button type="button" class="btn" onclick="CSStudio.callRuby('export_dxf')">Exportar DXF CNC</button>
+      <button type="button" class="btn success" onclick="CSStudio.callRuby('export_erp_json')">Publicar p/ CS Fachadas ERP</button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Módulos do Plugin">
+    <button type="button" class="tab-btn active" data-tab="frame" onclick="CSStudio.switchTab('frame')">1. Gradil & Estruturas</button>
+    <button type="button" class="tab-btn" data-tab="tray" onclick="CSStudio.switchTab('tray')">2. Bandeja ACM & Planificação</button>
+    <button type="button" class="tab-btn" data-tab="facade" onclick="CSStudio.switchTab('facade')">3. Fachada em Malha (ACM + Estrutura)</button>
+    <button type="button" class="tab-btn" data-tab="report" onclick="CSStudio.switchTab('report')">4. Relatório, Barras 1D & Emendas</button>
+  </nav>
+
+  <main class="content">
+    <!-- ABA 1: ESTRUTURAS METÁLICAS -->
+    <section class="panel active" id="panel-frame">
+      <div class="card">
+        <h3>Dimensões Gerais & Moldura (A002 Corte Reto / A003 Meia-Esquadria)</h3>
+        <div class="grid-4">
+          <div class="field">
+            <label for="fName">Nome da Estrutura</label>
+            <input type="text" id="fName" value="Estrutura Gradil #01">
+          </div>
+          <div class="field">
+            <label for="fWidth">Largura Externa (mm)</label>
+            <input type="number" id="fWidth" value="3000" min="100" step="10">
+          </div>
+          <div class="field">
+            <label for="fHeight">Altura Externa (mm)</label>
+            <input type="number" id="fHeight" value="1500" min="100" step="10">
+          </div>
+          <div class="field">
+            <label for="fMaterial">Material</label>
+            <select id="fMaterial">
+              <option value="aco_carbono">Aço Carbono</option>
+              <option value="galvanizado">Galvanizado</option>
+              <option value="aluminio">Alumínio</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid-4" style="margin-top:10px;">
+          <div class="field">
+            <label for="fProfileCorda">Bitola do Quadro</label>
+            <select id="fProfileCorda"></select>
+          </div>
+          <div class="field">
+            <label for="fRotCorda">Orientação do Quadro</label>
+            <select id="fRotCorda">
+              <option value="1">Menor para frente</option>
+              <option value="2">Maior para frente</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="fCornerType">Tipo de Corte (Cantos)</label>
+            <select id="fCornerType">
+              <option value="encosto">Por Dentro (Corte Reto)</option>
+              <option value="passante_h">Por Fora (Travessa Passante)</option>
+              <option value="esquadria">Meia-Esquadria (45°)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="fOpenSide">Lado Aberto</label>
+            <select id="fOpenSide">
+              <option value="0">Nenhum (Fechado)</option>
+              <option value="1">Esquerdo Aberto</option>
+              <option value="2">Direito Aberto</option>
+              <option value="3">Ambos Abertos</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Travessas Horizontais, Montantes Verticais & Emendas de Produção</h3>
+        <div class="grid-4">
+          <div class="field">
+            <label for="fProfileTrav">Bitola das Travessas</label>
+            <select id="fProfileTrav"></select>
+          </div>
+          <div class="field">
+            <label for="fTravV">Qtde. Montantes Verticais</label>
+            <input type="number" id="fTravV" value="2" min="0" max="40">
+          </div>
+          <div class="field">
+            <label for="fTravH">Qtde. Travessas Horizontais</label>
+            <input type="number" id="fTravH" value="1" min="0" max="30">
+          </div>
+          <div class="field">
+            <label for="fTravAlign">Alinhamento na Profundidade</label>
+            <select id="fTravAlign">
+              <option value="frente">Faceado na Frente</option>
+              <option value="centro">No Centro</option>
+              <option value="atras">Faceado Atrás</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-4" style="margin-top:10px;">
+          <div class="field">
+            <label for="fBarMm">Barra Comercial (mm)</label>
+            <input type="number" id="fBarMm" value="6000" step="100">
+          </div>
+          <div class="field">
+            <label for="fSeamStrategy">Estratégia de Emendas</label>
+            <select id="fSeamStrategy">
+              <option value="economia">Barra inteira + complemento</option>
+              <option value="iguais">Partes iguais</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="fColorMode">Modo de Cor 3D</label>
+            <select id="fColorMode" onchange="CSStudio.callRuby('set_color_mode', this.value)">
+              <option value="tipo">Cor por Tipo de Tubo</option>
+              <option value="comprimento">Cor por Comprimento</option>
+              <option value="unica">Cor Única (Acabamento)</option>
+            </select>
+          </div>
+          <div class="field" style="justify-content:flex-end;">
+            <button type="button" class="btn primary" onclick="CSStudio.submitFrame(false)">Gerar Estrutura no 3D</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Fixadores 3D (.skp) & Leitura Automática de Bandejas ACM</h3>
+        <div class="btn-row">
+          <button type="button" class="btn" onclick="CSStudio.callRuby('read_trays_create_frame', '{}')">Ler Bandejas ACM → Gerar Estrutura</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('insert_fastener', 'F001')">+ Ancoragem (F001)</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('insert_fastener', 'F002')">+ Espera (F002)</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('insert_fastener', 'F003')">+ Cantoneira Fixador (F003)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 2: BANDEJA ACM -->
+    <section class="panel" id="panel-tray">
+      <div class="card">
+        <h3>Bandeja de ACM Paramétrica (Dobras, Abas, Refile e Fresa)</h3>
+        <div class="grid-4">
+          <div class="field">
+            <label for="tCode">Código</label>
+            <input type="text" id="tCode" value="P01">
+          </div>
+          <div class="field">
+            <label for="tName">Nome da Peça</label>
+            <input type="text" id="tName" value="Bandeja Principal">
+          </div>
+          <div class="field">
+            <label for="tWidth">Largura Frontal (mm)</label>
+            <input type="number" id="tWidth" value="1200" min="80">
+          </div>
+          <div class="field">
+            <label for="tHeight">Altura Frontal (mm)</label>
+            <input type="number" id="tHeight" value="800" min="80">
+          </div>
+        </div>
+        <div class="grid-4" style="margin-top:10px;">
+          <div class="field">
+            <label for="tEdgeType">Tipo das 4 Bordas</label>
+            <select id="tEdgeType">
+              <option value="dobra">Dobra 90° (Retorno simples)</option>
+              <option value="dobra_aba">Dobra + Aba de Fixação</option>
+              <option value="refile">Aba de Refile (Plana)</option>
+              <option value="corte">Corte Reto (Sem Retorno)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="tReturnMm">Retorno / Dobra (mm)</label>
+            <input type="number" id="tReturnMm" value="50" min="0">
+          </div>
+          <div class="field">
+            <label for="tAbaMm">Aba de Fixação (mm)</label>
+            <input type="number" id="tAbaMm" value="20" min="0">
+          </div>
+          <div class="field">
+            <label for="tBendFactor">Fator de Dobra (mm)</label>
+            <input type="number" id="tBendFactor" value="1.5" step="0.1">
+          </div>
+        </div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button type="button" class="btn primary" onclick="CSStudio.submitTray()">Criar Bandeja 3D no SketchUp</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('unfold_selected_3d')">Planificar Bandeja Selecionada no 3D</button>
+          <button type="button" class="btn" onclick="CSStudio.callRuby('export_dxf')">Exportar DXF CNC (AC1009)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 3: FACHADA EM MALHA -->
+    <section class="panel" id="panel-facade">
+      <div class="card">
+        <h3>Gerador de Fachada Completa (Malha de Bandejas ACM + Estrutura Metálica Automática)</h3>
+        <div class="grid-4">
+          <div class="field">
+            <label for="gTotalW">Largura Total da Fachada (mm)</label>
+            <input type="number" id="gTotalW" value="3600" step="50">
+          </div>
+          <div class="field">
+            <label for="gTotalH">Altura Total da Fachada (mm)</label>
+            <input type="number" id="gTotalH" value="1800" step="50">
+          </div>
+          <div class="field">
+            <label for="gCols">Colunas de Bandejas</label>
+            <input type="number" id="gCols" value="3" min="1" max="20">
+          </div>
+          <div class="field">
+            <label for="gRows">Linhas de Bandejas</label>
+            <input type="number" id="gRows" value="2" min="1" max="10">
+          </div>
+        </div>
+        <div class="grid-3" style="margin-top:10px;">
+          <div class="field">
+            <label for="gJoint">Junta de Dilatação (mm)</label>
+            <input type="number" id="gJoint" value="10" min="0" max="50">
+          </div>
+          <div class="field">
+            <label for="gReturn">Retorno das Bandejas (mm)</label>
+            <input type="number" id="gReturn" value="50" min="15" max="250">
+          </div>
+          <div class="field" style="justify-content:flex-end;">
+            <button type="button" class="btn primary" onclick="CSStudio.submitFacadeGrid()">Criar Painel ACM + Estrutura no 3D</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 4: RELATÓRIO E PLANO DE CORTE -->
+    <section class="panel" id="panel-report">
+      <div class="card">
+        <h3>Resumo do Modelo Ativo (Tubos, Barras 6000mm e Bandejas ACM)</h3>
+        <div id="reportSummaryText" style="margin-bottom:8px; color:var(--muted);">Carregando leitura do modelo...</div>
+        <div tabindex="0" role="region" aria-label="Lista de corte de tubos e bandejas" class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Descrição / Perfil</th>
+                <th>Medida / Corte</th>
+                <th>Aproveitamento</th>
+              </tr>
+            </thead>
+            <tbody id="reportTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span id="statusText">Pronto · Integrado ao CS Fachadas ERP</span>
+    <button type="button" class="btn" onclick="CSStudio.callRuby('refresh_state')">↻ Atualizar Leitura</button>
+  </footer>
+
+  <script>
+    window.CSStudio = {
+      state: null,
+      callRuby: function(action, payload) {
+        if (window.sketchup && window.sketchup[action]) {
+          window.sketchup[action](payload || '');
+        }
+      },
+      switchTab: function(tabId) {
+        var btns = document.querySelectorAll('.tab-btn');
+        for (var i = 0; i < btns.length; i++) {
+          btns[i].classList.toggle('active', btns[i].getAttribute('data-tab') === tabId);
+        }
+        var panels = document.querySelectorAll('.panel');
+        for (var j = 0; j < panels.length; j++) {
+          panels[j].classList.toggle('active', panels[j].id === 'panel-' + tabId);
+        }
+      },
+      loadModelState: function(data) {
+        this.state = data || {};
+        if (data.initial_tab) this.switchTab(data.initial_tab);
+        var profiles = data.profiles || [];
+        var selC = document.getElementById('fProfileCorda');
+        var selT = document.getElementById('fProfileTrav');
+        if (selC && selC.options.length === 0 && profiles.length) {
+          profiles.forEach(function(p) {
+            selC.add(new Option(p.name, p.id, p.id === 5, p.id === 5));
+            selT.add(new Option(p.name, p.id, p.id === 3, p.id === 3));
+          });
+        }
+        this.renderReport();
+      },
+      submitFrame: function(updateSel) {
+        var payload = {
+          name: document.getElementById('fName').value,
+          width_mm: Number(document.getElementById('fWidth').value),
+          height_mm: Number(document.getElementById('fHeight').value),
+          material: document.getElementById('fMaterial').value,
+          profile_corda: Number(document.getElementById('fProfileCorda').value || 5),
+          rot_corda: Number(document.getElementById('fRotCorda').value || 1),
+          corner_type: document.getElementById('fCornerType').value,
+          open_side: Number(document.getElementById('fOpenSide').value || 0),
+          profile_travessa: Number(document.getElementById('fProfileTrav').value || 3),
+          trav_v_count: Number(document.getElementById('fTravV').value || 0),
+          trav_h_count: Number(document.getElementById('fTravH').value || 0),
+          trav_align: document.getElementById('fTravAlign').value,
+          bar_mm: Number(document.getElementById('fBarMm').value || 6000),
+          seam_strategy: document.getElementById('fSeamStrategy').value,
+          color_mode: document.getElementById('fColorMode').value,
+          update_selected: !!updateSel
+        };
+        this.callRuby('create_or_update_frame', JSON.stringify(payload));
+      },
+      submitTray: function() {
+        var payload = {
+          code: document.getElementById('tCode').value,
+          name: document.getElementById('tName').value,
+          width_mm: Number(document.getElementById('tWidth').value),
+          height_mm: Number(document.getElementById('tHeight').value),
+          default_edge_type: document.getElementById('tEdgeType').value,
+          return_mm: Number(document.getElementById('tReturnMm').value),
+          aba_mm: Number(document.getElementById('tAbaMm').value),
+          bend_factor_mm: Number(document.getElementById('tBendFactor').value)
+        };
+        this.callRuby('create_or_update_tray', JSON.stringify(payload));
+      },
+      submitFacadeGrid: function() {
+        var payload = {
+          total_w_mm: Number(document.getElementById('gTotalW').value),
+          total_h_mm: Number(document.getElementById('gTotalH').value),
+          cols: Number(document.getElementById('gCols').value),
+          rows: Number(document.getElementById('gRows').value),
+          joint_mm: Number(document.getElementById('gJoint').value),
+          return_mm: Number(document.getElementById('gReturn').value),
+          generate_frame: true
+        };
+        this.callRuby('create_facade_grid', JSON.stringify(payload));
+      },
+      renderReport: function() {
+        var d = this.state || {};
+        var bp = d.bar_plan || {};
+        var trays = d.trays || [];
+        var sumEl = document.getElementById('reportSummaryText');
+        if (sumEl) {
+          sumEl.textContent = 'Tubos: ' + (bp.total_pieces || 0) + ' pçs · Total Linear: ' +
+            (bp.total_linear_m || 0) + ' m · Barras (6m): ' + (bp.total_bars || 0) +
+            ' · Bandejas ACM: ' + trays.length;
+        }
+        var tbody = document.getElementById('reportTableBody');
+        if (!tbody) return;
+        var html = '';
+        (bp.groups || []).forEach(function(g) {
+          html += '<tr><th>' + g.profile_name + '</th><td>' + g.material + ' (' + g.pieces.length + ' pçs)</td>' +
+            '<td>' + g.bars_count + ' barra(s) de ' + (bp.bar_mm || 6000) + 'mm</td>' +
+            '<td>' + g.utilization_pct + '% aproveitamento</td></tr>';
+        });
+        trays.forEach(function(t) {
+          var u = t.unfold || {};
+          html += '<tr><th>' + (u.code || 'ACM') + '</th><td>' + (u.name || 'Bandeja ACM') + '</td>' +
+            '<td>Planificada: ' + (u.width || 0) + ' × ' + (u.height || 0) + ' mm</td>' +
+            '<td>' + (u.area_m2 || 0) + ' m²</td></tr>';
+        });
+        tbody.innerHTML = html || '<tr><td colspan="4">Nenhuma estrutura ou bandeja criada ainda no modelo.</td></tr>';
+      }
+    };
+    window.addEventListener('DOMContentLoaded', function() {
+      CSStudio.callRuby('ready');
+    });
+  </script>
+</body>
+</html>

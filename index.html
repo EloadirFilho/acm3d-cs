@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Totem Chão de Fábrica | CS Fachadas ERP</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-viewport-mode="tablet">
+
+  <!-- Barra de Simulação (Externa ao Tablet 11" para testar modos facilmente) -->
+  <aside class="simulator-toolbar" aria-label="Controles do Simulador de Tablet">
+    <div>
+      <strong>CS Fachadas · Totem Chão de Fábrica (Tablet 11" Horizontal · 1280×800)</strong>
+      <span style="margin-inline-start: 10px; color: #a1a1aa;">Fluxo 2 etapas + Equipe + Calculadora Material + Chapas 2D Touch</span>
+    </div>
+    <div class="sim-controls">
+      <button type="button" class="sim-btn" id="btnSimTablet" aria-pressed="true">Moldura Tablet 11"</button>
+      <button type="button" class="sim-btn" id="btnSimFullscreen" aria-pressed="false">Tela Cheia (Kiosk)</button>
+      <button type="button" class="sim-btn" id="btnSimLockPin">Testar Tela de PIN</button>
+    </div>
+  </aside>
+
+  <!-- Moldura do Tablet de 11 Polegadas na Horizontal -->
+  <div class="tablet-viewport" id="tabletViewport">
+
+    <!-- TELA DE BLOQUEIO / PIN RÁPIDO COM AVATARES -->
+    <section class="pin-lock-overlay" id="pinLockOverlay" aria-label="Acesso por PIN do Operador" hidden>
+      <div>
+        <span class="role-badge">CS FACHADAS · TOTEM DE PRODUÇÃO</span>
+        <h2 style="font-family: var(--font-display); font-size: 2.3rem; margin-block-start: 10px; text-transform: uppercase;">
+          Quem está no totem?
+        </h2>
+        <p style="color: #a1a1aa; font-size: 0.95rem; margin-block-start: 4px;">
+          Toque no seu nome para acesso rápido ou digite seu PIN de 4 dígitos.
+        </p>
+        <div class="pin-user-grid" id="pinQuickUsersGrid"></div>
+      </div>
+
+      <div style="background: #18181b; padding: 24px; border-radius: 18px; border: 1px solid #27272a;">
+        <div style="text-align: center;">
+          <span id="pinSelectedUserLabel" style="font-weight: 800; font-size: 1.05rem; color: #f4f4f5;">Digite o PIN (Demo: 1234)</span>
+          <div class="pin-dots-box" id="pinDotsBox" aria-live="polite">
+            <span class="pin-dot"></span>
+            <span class="pin-dot"></span>
+            <span class="pin-dot"></span>
+            <span class="pin-dot"></span>
+          </div>
+        </div>
+        <div class="numpad-grid" id="pinNumpadGrid" style="margin-block-start: 12px;">
+          <button type="button" class="numpad-key" data-pin-key="1" style="background:#27272a; color:#fff; border-color:#3f3f46;">1</button>
+          <button type="button" class="numpad-key" data-pin-key="2" style="background:#27272a; color:#fff; border-color:#3f3f46;">2</button>
+          <button type="button" class="numpad-key" data-pin-key="3" style="background:#27272a; color:#fff; border-color:#3f3f46;">3</button>
+          <button type="button" class="numpad-key" data-pin-key="4" style="background:#27272a; color:#fff; border-color:#3f3f46;">4</button>
+          <button type="button" class="numpad-key" data-pin-key="5" style="background:#27272a; color:#fff; border-color:#3f3f46;">5</button>
+          <button type="button" class="numpad-key" data-pin-key="6" style="background:#27272a; color:#fff; border-color:#3f3f46;">6</button>
+          <button type="button" class="numpad-key" data-pin-key="7" style="background:#27272a; color:#fff; border-color:#3f3f46;">7</button>
+          <button type="button" class="numpad-key" data-pin-key="8" style="background:#27272a; color:#fff; border-color:#3f3f46;">8</button>
+          <button type="button" class="numpad-key" data-pin-key="9" style="background:#27272a; color:#fff; border-color:#3f3f46;">9</button>
+          <button type="button" class="numpad-key" data-pin-key="clear" style="background:#27272a; color:#f87171; border-color:#3f3f46; font-size:0.9rem;">LIMPAR</button>
+          <button type="button" class="numpad-key" data-pin-key="0" style="background:#27272a; color:#fff; border-color:#3f3f46;">0</button>
+          <button type="button" class="numpad-key" data-pin-key="enter" style="background:var(--accent-primary); color:#fff; border-color:var(--accent-primary); font-size:0.95rem;">ENTRAR</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CABEÇALHO SUPERIOR DO TOTEM -->
+    <header class="totem-header">
+      <div class="operator-identity">
+        <div class="operator-avatar" id="headerOpAvatar" aria-hidden="true">PE</div>
+        <div>
+          <div class="operator-title-row">
+            <h1 class="operator-greeting" id="headerOpName">OLÁ, PEDRO</h1>
+            <span class="role-badge" id="headerOpBadge">APONTA POR OUTROS</span>
+          </div>
+          <p class="operator-subtitle" id="headerOpSectors">Seus setores: todos os setores · Toque em qualquer tela renova o tempo</p>
+        </div>
+      </div>
+
+      <nav class="header-actions" aria-label="Navegação Principal do Totem">
+        <div class="inactivity-pill" title="Toque para adicionar +30s" id="inactivityPill" role="status">
+          <span>PIN em <strong class="timer-count" id="inactivitySeconds">60s</strong></span>
+        </div>
+
+        <button type="button" class="nav-tab-btn" data-nav-view="os" aria-current="page">
+          <span>Trabalhos (OS)</span>
+          <span class="nav-tab-badge" id="badgeTotalOS">6</span>
+        </button>
+
+        <button type="button" class="nav-tab-btn" data-nav-view="material">
+          <span>Material</span>
+          <span class="nav-tab-badge" id="badgeSuggestedMat" title="Materiais previstos nas OS ativas">3</span>
+        </button>
+
+        <button type="button" class="nav-tab-btn" data-nav-view="chapas">
+          <span>Chapas</span>
+        </button>
+
+        <button type="button" class="nav-tab-btn" data-nav-view="acm360">
+          <span>ACM360 Studio</span>
+          <span class="nav-tab-badge" id="badgeAcm360Items" title="Estruturas + Bandejas ACM">2</span>
+        </button>
+
+        <button type="button" class="btn-exit-pin" id="btnHeaderExit">
+          <span>Sair</span>
+        </button>
+      </nav>
+    </header>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="totem-main" id="mainContent" tabindex="-1">
+
+      <!-- ====================================================================
+           VISTA 1: ORDENS DE SERVIÇO (FILA + EM EXECUÇÃO + A CAMINHO)
+           ==================================================================== -->
+      <section class="view-panel" id="viewOS" aria-label="Painel de Ordens de Serviço">
+        <!-- Barra de Setores em 1 Linha -->
+        <div class="sector-bar">
+          <div class="sector-scroll-list" id="sectorPillsContainer" role="toolbar" aria-label="Filtro por Setor da Fábrica"></div>
+          <button type="button" class="sector-toggle-zero" id="btnToggleZeroSectors" aria-pressed="false">
+            Mostrar setores vazios (0)
+          </button>
+        </div>
+
+        <!-- Quadro de 3 Colunas na Horizontal (11" 16:10) -->
+        <div class="os-board-grid">
+          <!-- Coluna 1: EM EXECUÇÃO AGORA -->
+          <section class="board-column col-active" aria-labelledby="colActiveHeading">
+            <div class="column-header">
+              <h2 class="column-title" id="colActiveHeading">
+                <span aria-hidden="true">●</span> EM EXECUÇÃO AGORA
+              </h2>
+              <span class="column-badge" id="countActiveOS">0</span>
+            </div>
+            <div class="column-body" id="listActiveOS"></div>
+          </section>
+
+          <!-- Coluna 2: É A VEZ DO SEU SETOR (PRAZO MAIS CURTO PRIMEIRO) -->
+          <section class="board-column col-queue" aria-labelledby="colQueueHeading">
+            <div class="column-header">
+              <h2 class="column-title" id="colQueueHeading">
+                É A VEZ DO SEU SETOR — PRAZO MAIS CURTO PRIMEIRO
+              </h2>
+              <span class="column-badge" id="countQueueOS">0</span>
+            </div>
+            <div class="column-body" id="listQueueOS"></div>
+          </section>
+
+          <!-- Coluna 3: A CAMINHO (DÁ PARA ADIANTAR) -->
+          <section class="board-column" aria-labelledby="colIncomingHeading">
+            <div class="column-header">
+              <h2 class="column-title" id="colIncomingHeading">
+                A CAMINHO (DÁ P/ ADIANTAR)
+              </h2>
+              <span class="column-badge" id="countIncomingOS">0</span>
+            </div>
+            <div class="column-body" id="listIncomingOS"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           VISTA 2: MOVIMENTAÇÃO DE ESTOQUE (MATERIAL)
+           ==================================================================== -->
+      <section class="view-panel" id="viewMaterial" aria-label="Movimentação de Material e Estoque" hidden>
+        <div class="material-split-layout">
+          <!-- Coluna Esquerda: Catálogo + Busca + Categorias + Sugeridos pelas OS -->
+          <div class="material-catalog-pane">
+            <div class="catalog-header">
+              <div class="search-box">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <input type="search" id="materialSearchInput" placeholder="Buscar lona, adesivo, metalon, fonte, LED..." aria-label="Buscar material">
+              </div>
+              <div class="category-pills" id="materialCategoryPills" role="toolbar" aria-label="Categorias de Material"></div>
+            </div>
+            <div class="material-items-list" id="materialCatalogList" role="listbox" aria-label="Lista de Materiais"></div>
+          </div>
+
+          <!-- Coluna Direita: Calculadora Inteligente + Vínculo com OS -->
+          <div class="material-entry-pane">
+            <!-- Teclado e Calculadora -->
+            <div class="keypad-column">
+              <div class="calc-mode-tabs" id="matCalcModeTabs">
+                <button type="button" class="calc-mode-btn" data-calc-mode="direct" aria-pressed="true" id="btnModeDirect">
+                  Digitar Direto
+                </button>
+                <button type="button" class="calc-mode-btn" data-calc-mode="dimensions" aria-pressed="false" id="btnModeDimensions">
+                  Calcular L × A (cm)
+                </button>
+              </div>
+
+              <!-- Se estiver no modo Calcular L x A (cm) -->
+              <div class="dim-calc-row" id="matDimCalcBox" hidden>
+                <button type="button" class="dim-field-btn" id="btnMatDimW" aria-current="true">
+                  <span class="dim-field-label">Largura (cm)</span>
+                  <span class="dim-field-val" id="valMatDimW">100</span>
+                </button>
+                <span style="font-weight: 800; color: var(--text-secondary);">×</span>
+                <button type="button" class="dim-field-btn" id="btnMatDimH" aria-current="false">
+                  <span class="dim-field-label">Altura (cm)</span>
+                  <span class="dim-field-val" id="valMatDimH">53</span>
+                </button>
+              </div>
+
+              <div class="qty-display-box">
+                <div>
+                  <span class="qty-display-label" id="matSelectedUnitLabel">QUANTIDADE (M²)</span>
+                  <div style="font-size: 0.76rem; color: var(--text-secondary);" id="matStockSubInfo">Em estoque: 38 m²</div>
+                </div>
+                <output class="qty-display-value" id="matQtyDisplay" aria-live="polite">0</output>
+              </div>
+
+              <!-- Atalhos Rápidos (1 Toque Previsto da OS ou Frações de Barra/Rolo) -->
+              <div class="quick-presets-row" id="matQuickPresetsRow"></div>
+
+              <!-- Teclado Numérico Fixo -->
+              <div class="numpad-grid" id="matNumpadGrid">
+                <button type="button" class="numpad-key" data-mat-key="1">1</button>
+                <button type="button" class="numpad-key" data-mat-key="2">2</button>
+                <button type="button" class="numpad-key" data-mat-key="3">3</button>
+                <button type="button" class="numpad-key" data-mat-key="4">4</button>
+                <button type="button" class="numpad-key" data-mat-key="5">5</button>
+                <button type="button" class="numpad-key" data-mat-key="6">6</button>
+                <button type="button" class="numpad-key" data-mat-key="7">7</button>
+                <button type="button" class="numpad-key" data-mat-key="8">8</button>
+                <button type="button" class="numpad-key" data-mat-key="9">9</button>
+                <button type="button" class="numpad-key" data-mat-key=",">,</button>
+                <button type="button" class="numpad-key" data-mat-key="0">0</button>
+                <button type="button" class="numpad-key" data-mat-key="backspace" aria-label="Apagar dígito">⌫</button>
+              </div>
+            </div>
+
+            <!-- Seleção de OS ("PARA QUAL TRABALHO?") + Botões PEGUEI / DEVOLVI -->
+            <div class="work-target-column">
+              <div style="display:flex; flex-direction:column; gap:8px; overflow:hidden; flex:1;">
+                <div style="display:flex; align-items:center; justify-content:space-between;">
+                  <span class="field-group-label" style="margin:0;" id="matItemHeaderTitle">ADESIVO AVERY® BRANCO BRILHO</span>
+                  <span class="field-group-label" style="margin:0;">PARA QUAL TRABALHO?</span>
+                </div>
+                <div class="work-options-list" id="matWorkOptionsList" role="radiogroup" aria-label="Para qual trabalho é este material"></div>
+              </div>
+
+              <div class="material-submit-row">
+                <button type="button" class="btn-submit-peguei" id="btnMatSubmitPeguei">
+                  PEGUEI
+                </button>
+                <button type="button" class="btn-submit-devolvi" id="btnMatSubmitDevolvi">
+                  Devolvi
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           VISTA 3: CHAPAS (CORTE 2D E CADASTRO COM TECLADO INTEGRADO)
+           ==================================================================== -->
+      <section class="view-panel" id="viewChapas" aria-label="Gestão de Chapas e Retalhos" hidden>
+        <div class="chapas-layout">
+          <!-- Coluna Esquerda: Botões de Toque + Teclado Numérico Integrado -->
+          <div class="chapas-controls-card">
+            <div class="submode-bar" role="tablist" aria-label="Modo de Operação de Chapas">
+              <button type="button" class="submode-pill" id="tabChapaCut" aria-pressed="true">
+                Cortei de uma chapa
+              </button>
+              <button type="button" class="submode-pill" id="tabChapaRegister" aria-pressed="false">
+                Cadastrar sobra ou chapa
+              </button>
+            </div>
+
+            <!-- Seletor de Tipo de Chapa por Botões de Toque (Sem <select> nativo) -->
+            <div>
+              <span class="field-group-label">TIPO DE CHAPA</span>
+              <div class="sheet-type-pills" id="chapaTypePills"></div>
+            </div>
+
+            <!-- Largura (cm) + Altura (cm) + Girar 90° -->
+            <div>
+              <span class="field-group-label" id="chapaDimsHeading">MEDIDAS DO PEDAÇO CORTADO (CM)</span>
+              <div class="chapa-dims-row">
+                <button type="button" class="dim-field-btn" id="btnChapaFocusW" aria-current="true">
+                  <span class="dim-field-label">LARGURA (CM)</span>
+                  <span class="dim-field-val" id="valChapaW">—</span>
+                </button>
+                <button type="button" class="dim-field-btn" id="btnChapaFocusH" aria-current="false">
+                  <span class="dim-field-label">ALTURA (CM)</span>
+                  <span class="dim-field-val" id="valChapaH">—</span>
+                </button>
+                <button type="button" class="btn-rotate-90" id="btnChapaRotate">
+                  <span>↻ Girar 90°</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Teclado Numérico Fixo Compacto para não abrir teclado virtual do Tablet -->
+            <div>
+              <div class="chapa-numpad" id="chapaNumpadGrid" aria-label="Teclado numérico de medidas da chapa">
+                <button type="button" class="numpad-key" data-chapa-key="1">1</button>
+                <button type="button" class="numpad-key" data-chapa-key="2">2</button>
+                <button type="button" class="numpad-key" data-chapa-key="3">3</button>
+                <button type="button" class="numpad-key" data-chapa-key="4">4</button>
+                <button type="button" class="numpad-key" data-chapa-key="5">5</button>
+                <button type="button" class="numpad-key" data-chapa-key="backspace" aria-label="Apagar">⌫</button>
+                <button type="button" class="numpad-key" data-chapa-key="6">6</button>
+                <button type="button" class="numpad-key" data-chapa-key="7">7</button>
+                <button type="button" class="numpad-key" data-chapa-key="8">8</button>
+                <button type="button" class="numpad-key" data-chapa-key="9">9</button>
+                <button type="button" class="numpad-key" data-chapa-key="0">0</button>
+                <button type="button" class="numpad-key" data-chapa-key="clear" style="font-size:0.78rem;">LIMPAR</button>
+              </div>
+            </div>
+
+            <!-- Seletor "PARA QUAL TRABALHO?" (No modo Corte) ou "ORIGEM DA CHAPA" (No modo Cadastro) -->
+            <div id="chapaWorkSelectorBlock">
+              <span class="field-group-label" id="chapaTargetLabel">PARA QUAL TRABALHO?</span>
+              <div class="chapa-os-pills" id="chapaOsPills"></div>
+            </div>
+
+            <!-- Botão de confirmação CORTEI / CADASTRAR -->
+            <button type="button" class="btn-cortei-submit" id="btnChapaSubmit">
+              CORTEI
+            </button>
+          </div>
+
+          <!-- Coluna Direita: Desenho 2D fiel ao modelo atual + Fita de Chapas (Sobras primeiro) -->
+          <div class="chapas-visual-column">
+            <div class="sheet-2d-stage-card">
+              <div class="sheet-stage-header">
+                <div>
+                  <span class="sheet-code-title" id="stageSheetCode">CH-4</span>
+                  <span class="sheet-meta-subtitle" id="stageSheetMeta">ACM · 100 × 50 cm · livre 0,50 m²</span>
+                </div>
+                <span class="status-pill ontime" id="stageSheetStatusHint">Digite L × A no teclado ao lado</span>
+              </div>
+
+              <!-- Desenho 2D Proporcional da Chapa -->
+              <div class="sheet-canvas-wrapper" id="sheet2dContainer"></div>
+            </div>
+
+            <div class="sheet-strip-section">
+              <span class="field-group-label" style="margin:0;">CHAPAS DESTE TIPO — SOBRAS PRIMEIRO, INTEIRAS POR ÚLTIMO</span>
+              <div class="sheet-strip-list" id="sheetStripList" role="listbox" aria-label="Chapas disponíveis deste tipo"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================================
+           VISTA 4: ACM360 STUDIO (ESTRUTURAS METÁLICAS, BANDEJAS ACM, PLANIFICAÇÃO & DXF)
+           ==================================================================== -->
+      <section class="view-panel" id="viewAcm360" aria-label="ACM360 Studio: Estruturas Metálicas, Bandejas ACM e Planificação DXF" hidden>
+        <div class="acm360-studio-layout">
+          <!-- Coluna Esquerda: Parâmetros de Engenharia (Gradil / Tubos / Bandejas ACM) -->
+          <div class="acm360-controls-card">
+            <div class="submode-bar" role="tablist" aria-label="Módulos do ACM360 Studio">
+              <button type="button" class="submode-pill" id="tabAcmModeFrame" aria-pressed="true">
+                1. Estruturas (Gradil &amp; Tubos)
+              </button>
+              <button type="button" class="submode-pill" id="tabAcmModeTrays" aria-pressed="false">
+                2. Bandejas ACM &amp; Planificação
+              </button>
+            </div>
+
+            <!-- PAINEL 1: ESTRUTURAS METÁLICAS (A002 CORTE RETO / A003 MEIA-ESQUADRIA) -->
+            <div id="acmPanelFrameControls" class="acm360-form-scroll">
+              <div class="acm-form-grid-2">
+                <div class="acm-field">
+                  <label for="inpAcmFrameW">LARGURA EXTERNA (MM)</label>
+                  <input type="number" id="inpAcmFrameW" value="3600" min="200" max="50000" step="50">
+                </div>
+                <div class="acm-field">
+                  <label for="inpAcmFrameH">ALTURA EXTERNA (MM)</label>
+                  <input type="number" id="inpAcmFrameH" value="1800" min="200" max="20000" step="50">
+                </div>
+              </div>
+
+              <div class="acm-form-grid-2">
+                <div class="acm-field">
+                  <label for="selAcmProfileFrame">BITOLA DO QUADRO (21 PERFIS)</label>
+                  <select id="selAcmProfileFrame"></select>
+                </div>
+                <div class="acm-field">
+                  <label for="selAcmProfileTrav">BITOLA DAS TRAVESSAS</label>
+                  <select id="selAcmProfileTrav"></select>
+                </div>
+              </div>
+
+              <div class="acm-form-grid-3">
+                <div class="acm-field">
+                  <label for="selAcmCornerType">CORTE DOS CANTOS</label>
+                  <select id="selAcmCornerType">
+                    <option value="encosto">Por Dentro (Reto)</option>
+                    <option value="passante_h">Por Fora (Passante)</option>
+                    <option value="esquadria">Meia-Esquadria 45°</option>
+                  </select>
+                </div>
+                <div class="acm-field">
+                  <label for="selAcmRotCorda">ORIENTAÇÃO TUBO</label>
+                  <select id="selAcmRotCorda">
+                    <option value="1">Menor p/ frente</option>
+                    <option value="2">Maior p/ frente</option>
+                  </select>
+                </div>
+                <div class="acm-field">
+                  <label for="selAcmOpenSide">LADO ABERTO</label>
+                  <select id="selAcmOpenSide">
+                    <option value="0">Fechado</option>
+                    <option value="1">Esquerdo</option>
+                    <option value="2">Direito</option>
+                    <option value="3">Ambos</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="acm-form-grid-3">
+                <div class="acm-field">
+                  <label for="inpAcmTravV">MONTANTES VERT.</label>
+                  <input type="number" id="inpAcmTravV" value="2" min="0" max="30">
+                </div>
+                <div class="acm-field">
+                  <label for="inpAcmTravH">TRAVESSAS HORIZ.</label>
+                  <input type="number" id="inpAcmTravH" value="1" min="0" max="20">
+                </div>
+                <div class="acm-field">
+                  <label for="selAcmBarStrategy">EMENDAS (6000MM)</label>
+                  <select id="selAcmBarStrategy">
+                    <option value="economia">Barra Inteira + Compl.</option>
+                    <option value="iguais">Partes Iguais</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="acm-form-grid-2">
+                <div class="acm-field">
+                  <label for="selAcmMaterial">MATERIAL</label>
+                  <select id="selAcmMaterial">
+                    <option value="Aço Carbono">Aço Carbono</option>
+                    <option value="Galvanizado">Galvanizado</option>
+                    <option value="Alumínio">Alumínio</option>
+                  </select>
+                </div>
+                <div class="acm-field">
+                  <label for="selAcmColorMode">MODO DE COR</label>
+                  <select id="selAcmColorMode">
+                    <option value="tipo">Por Tipo de Tubo</option>
+                    <option value="comprimento">Por Comprimento</option>
+                    <option value="unica">Cor Única</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- PAINEL 2: BANDEJAS ACM, DOBRAS, ABAS & MALHA -->
+            <div id="acmPanelTrayControls" class="acm360-form-scroll" hidden>
+              <div class="acm-form-grid-3">
+                <div class="acm-field">
+                  <label for="inpAcmGridCols">COLUNAS (MALHA)</label>
+                  <input type="number" id="inpAcmGridCols" value="3" min="1" max="15">
+                </div>
+                <div class="acm-field">
+                  <label for="inpAcmGridRows">LINHAS (MALHA)</label>
+                  <input type="number" id="inpAcmGridRows" value="2" min="1" max="10">
+                </div>
+                <div class="acm-field">
+                  <label for="inpAcmJointMm">JUNTA DILAT. (MM)</label>
+                  <input type="number" id="inpAcmJointMm" value="10" min="0" max="40">
+                </div>
+              </div>
+
+              <div class="acm-form-grid-3">
+                <div class="acm-field">
+                  <label for="selAcmEdgeType">TIPO DAS 4 BORDAS</label>
+                  <select id="selAcmEdgeType">
+                    <option value="dobra">Dobra 90° (Retorno)</option>
+                    <option value="dobra_aba">Dobra + Aba Fixação</option>
+                    <option value="refile">Aba de Refile (Plana)</option>
+                    <option value="corte">Corte Reto (Sem Dobra)</option>
+                  </select>
+                </div>
+                <div class="acm-field">
+                  <label for="inpAcmReturnMm">RETORNO (MM)</label>
+                  <input type="number" id="inpAcmReturnMm" value="50" min="0" max="250">
+                </div>
+                <div class="acm-field">
+                  <label for="inpAcmAbaMm">ABA FIXAÇÃO (MM)</label>
+                  <input type="number" id="inpAcmAbaMm" value="20" min="0" max="100">
+                </div>
+              </div>
+
+              <div class="acm-form-grid-3">
+                <div class="acm-field">
+                  <label for="inpAcmBendFactor">FATOR DOBRA (MM)</label>
+                  <input type="number" id="inpAcmBendFactor" value="1.5" min="0" max="6" step="0.1">
+                </div>
+                <div class="acm-field">
+                  <label for="selAcmFresa">FRESA DO VINCO</label>
+                  <select id="selAcmFresa">
+                    <option value="V90">Fresa V 90° (Base 2mm)</option>
+                    <option value="V135">Fresa V 135°</option>
+                    <option value="U">Meia-Cana (U)</option>
+                  </select>
+                </div>
+                <div class="acm-field">
+                  <label for="selAcmCornerTrat">CANTOS DA BANDEJA</label>
+                  <select id="selAcmCornerTrat">
+                    <option value="esquadria">Meia-Esquadria</option>
+                    <option value="aberto">Canto Aberto</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="acm-checkbox-row">
+                <label for="chkAcmSyncJuntas">
+                  <input type="checkbox" id="chkAcmSyncJuntas" class="visually-hidden" checked>
+                  <span>Alinhar montantes e travessas automaticamente nas juntas do ACM (Ler ACM)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Botões de Ação e Integração SketchUp + ERP -->
+            <div class="acm360-actions-footer">
+              <div class="acm-btn-row">
+                <button type="button" class="acm-action-btn secondary" id="btnAcmSyncStructure" title="Lê as juntas das bandejas ACM e alinha montantes e travessas">
+                  ⚡ Ler ACM → Estrutura
+                </button>
+                <button type="button" class="acm-action-btn secondary" id="btnAcmExportDxf" title="Gera arquivo DXF AC1009 com camadas ACM_CHAPA, ACM_CORTE, ACM_VINCO, ACM_DIRECAO e ACM_ETIQUETAS">
+                  📐 Baixar DXF CNC
+                </button>
+                <a href="CS_ACM360_v1.0.0.rbz" download="CS_ACM360_v1.0.0.rbz" class="acm-action-btn secondary" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center;">
+                  📦 Plugin .RBZ
+                </a>
+                <label class="acm-action-btn secondary" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">
+                  📥 Importar JSON
+                  <input type="file" id="inpAcmImportJson" accept=".json" hidden>
+                </label>
+              </div>
+              <button type="button" class="btn-cortei-submit" id="btnAcmCreateErpOS">
+                🚀 GERAR OS + ENVIAR BARRAS &amp; CHAPAS P/ PRODUÇÃO
+              </button>
+            </div>
+          </div>
+
+          <!-- Coluna Direita: Visualizador CAD Multi-Vista + Lista de Corte Responsiva -->
+          <div class="acm360-visual-column">
+            <div class="sheet-2d-stage-card" style="flex: 1.25;">
+              <div class="sheet-stage-header">
+                <div>
+                  <span class="sheet-code-title" id="acmStageTitle">FACHADA COMBINADA · 3600 × 1800 MM</span>
+                  <span class="sheet-meta-subtitle" id="acmStageSubtitle">6 bandejas ACM · 11 tubos · 3 barras (6m)</span>
+                </div>
+                <div class="acm-stage-tabs" role="tablist" aria-label="Modo de visualização CAD">
+                  <button type="button" class="acm-stage-tab" data-acm-canvas="combined" aria-pressed="true">Estrutura + ACM</button>
+                  <button type="button" class="acm-stage-tab" data-acm-canvas="unfold" aria-pressed="false">Planificação 2D (DXF)</button>
+                  <button type="button" class="acm-stage-tab" data-acm-canvas="bars" aria-pressed="false">Plano de Barras 1D</button>
+                </div>
+              </div>
+              <div class="sheet-canvas-wrapper" id="acm360CanvasContainer"></div>
+            </div>
+
+            <!-- Tabela Responsiva de Lista de Corte Consolidada (modern-web-guidance: responsive-table) -->
+            <div tabindex="0" role="region" aria-labelledby="acmCutlistCaption" class="table-wrapper acm-cutlist-wrapper">
+              <table id="acmCutlistTable">
+                <caption id="acmCutlistCaption" class="sr-only">Lista de corte consolidada de tubos metálicos e bandejas de ACM planificadas</caption>
+                <thead>
+                  <tr>
+                    <th>Peça / Código</th>
+                    <th>Especificação / Perfil</th>
+                    <th>Corte / Dobras</th>
+                    <th>Medida / Área</th>
+                  </tr>
+                </thead>
+                <tbody id="acmCutlistTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Notificação Toast no Rodapé do Totem -->
+    <div class="totem-toast" id="totemToast" role="status" aria-live="polite" hidden></div>
+
+    <!-- ======================================================================
+         MODAL 1: QUEM VAI FAZER? (INDIVIDUAL OU EQUIPE / DUPLA)
+         Usando <dialog closedby="any"> conforme modern-web-guidance
+         ====================================================================== -->
+    <dialog id="dialogAssignTeam" closedby="any" aria-labelledby="dialogAssignTitle">
+      <p class="dialog-eyebrow" id="assignOsEyebrow">OS-39 · CLIENTE BALCÃO · INSTALAÇÃO</p>
+      <h2 class="dialog-title" id="dialogAssignTitle">QUEM VAI FAZER?</h2>
+      <p class="dialog-desc">
+        Selecione <strong>1 ou mais operadores</strong> (dupla/equipe). Fica registrado que foi você que apontou.
+      </p>
+
+      <div class="operator-select-grid" id="assignOperatorsGrid"></div>
+
+      <div class="dialog-footer" style="justify-content: space-between;">
+        <button type="button" class="preset-chip-btn" id="btnQuickOnlyMe" style="min-block-size: 52px; padding-inline: 16px;">
+          ⚡ Só Eu Mesmo (Iniciar direto)
+        </button>
+        <div style="display:flex; gap:10px;">
+          <button type="button" class="btn-secondary-modal" data-close-dialog="dialogAssignTeam">Voltar</button>
+          <button type="button" class="btn-primary-modal" id="btnConfirmAssign">PEGUEI</button>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- ======================================================================
+         MODAL 2: DETALHES RICOS DA OS (CROQUI AMPLIADO, MATERIAIS E HISTÓRICO)
+         ====================================================================== -->
+    <dialog id="dialogOsDetails" closedby="any" aria-labelledby="dialogDetailsTitle" style="max-inline-size: 860px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+        <div>
+          <p class="dialog-eyebrow" id="detailsOsEyebrow">OS-39 · INSTALAÇÃO</p>
+          <h2 class="dialog-title" id="dialogDetailsTitle">Cliente Balcão</h2>
+          <p class="dialog-desc" id="detailsOsSubtitle">Banner — Até 1 metro de largura, Lona Front 440g</p>
+        </div>
+        <button type="button" class="btn-secondary-modal" data-close-dialog="dialogOsDetails">Fechar ✕</button>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1.15fr 1fr; gap: 18px; margin-block-start: 16px;">
+        <!-- Croqui Técnico Cotado + Observações -->
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div id="detailsCroquiBox" style="background:#0f172a; border-radius:12px; padding:16px; border:2px solid #334155; min-block-size:210px; display:flex; align-items:center; justify-content:center;"></div>
+          <div id="detailsObsBox" style="background:var(--color-amber-50); border:1.5px solid #fcd34d; border-radius:10px; padding:12px;"></div>
+        </div>
+
+        <!-- Materiais Previstos (Com atalho p/ dar baixa) + Histórico de Etapas -->
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <div>
+            <span class="field-group-label">MATERIAIS E CHAPAS PREVISTOS NA OS</span>
+            <div id="detailsMaterialsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+          </div>
+          <div>
+            <span class="field-group-label">HISTÓRICO DE ETAPAS ANTERIORES</span>
+            <div id="detailsHistoryList" style="display:flex; flex-direction:column; gap:6px; font-size:0.84rem;"></div>
+          </div>
+        </div>
+      </div>
+    </dialog>
+
+    <!-- ======================================================================
+         MODAL 3: FINALIZAR ETAPA (COM BAIXA RÁPIDA DE MATERIAL / CHAPA)
+         ====================================================================== -->
+    <dialog id="dialogFinishOS" closedby="any" aria-labelledby="dialogFinishTitle" style="max-inline-size: 660px;">
+      <p class="dialog-eyebrow" id="finishOsEyebrow">CONCLUIR ETAPA · OS-39</p>
+      <h2 class="dialog-title" id="dialogFinishTitle">FINALIZAR TRABALHO NO SETOR?</h2>
+      <p class="dialog-desc" id="finishNextSectorInfo">
+        Tempo registrado: <strong>00:18:42</strong> · Próximo setor: <strong>Expedição</strong>
+      </p>
+
+      <div style="margin-block: 16px; background: var(--surface-subtle); border: 1.5px solid var(--border-strong); border-radius: 12px; padding: 14px;">
+        <span class="field-group-label">BAIXA AUTOMÁTICA DE MATERIAIS DESTA ETAPA</span>
+        <div id="finishMaterialsChecklist" style="display:flex; flex-direction:column; gap:8px; margin-block-start:8px;"></div>
+      </div>
+
+      <div class="dialog-footer" style="justify-content: space-between; flex-wrap: wrap;">
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn-secondary-modal" id="btnFinishGoChapas" style="font-size:0.84rem; padding-inline:14px;">
+            Ir p/ Corte de Chapa
+          </button>
+          <button type="button" class="btn-secondary-modal" id="btnFinishGoMaterial" style="font-size:0.84rem; padding-inline:14px;">
+            Outro Material
+          </button>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button type="button" class="btn-secondary-modal" data-close-dialog="dialogFinishOS">Voltar</button>
+          <button type="button" class="btn-primary-modal" id="btnConfirmFinishOS" style="background: var(--color-emerald-600);">
+            ✓ CONCLUIR ETAPA
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
