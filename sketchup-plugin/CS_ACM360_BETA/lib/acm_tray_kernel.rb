@@ -157,45 +157,9 @@ module CS_ACM360_BETA
     # LEITURA AUTOMÁTICA DE BANDEJAS ACM -> ESTRUTURA METÁLICA (`ler_acm`)
     # Analisa os envelopes das bandejas ACM selecionadas, encontra as juntas
     # verticais e horizontais e gera a estrutura metálica atrás delas!
-    def self.create_frame_from_trays(tray_groups = nil, options = {}, own_operation = true)
-      model = Sketchup.active_model
-      return nil unless model
-
-      groups = tray_groups || model.selection.grep(Sketchup::Group)
-      if groups.empty?
-        # Se nada selecionado, busca todas as bandejas ACM do modelo
-        groups = model.active_entities.grep(Sketchup::Group).select do |g|
-          g.get_attribute(Catalog::ATTR_DICT, 'kind') == 'acm_tray'
-        end
-      end
-
-      if groups.empty?
-        UI.messagebox('Nenhuma bandeja ACM encontrada na seleção ou no modelo.')
-        return nil
-      end
-
-      boxes = []
-      max_return = 50.0
-      groups.each do |g|
-        bb = g.bounds
-        next if bb.empty?
-        raw_json = g.get_attribute(Catalog::ATTR_DICT, 'tray_json')
-        if raw_json
-          parsed = JSON.parse(raw_json) rescue nil
-          if parsed && parsed['edges']
-            ret = parsed['edges'].values.map { |e| e['return_mm'].to_f }.max
-            max_return = [max_return, ret].max if ret
-          end
-        end
-        boxes << {
-          min_x: to_mm(bb.min.x), max_x: to_mm(bb.max.x),
-          min_y: to_mm(bb.min.y), max_y: to_mm(bb.max.y),
-          min_z: to_mm(bb.min.z), max_z: to_mm(bb.max.z)
-        }
-      end
-
-      return nil if boxes.empty?
-
+    # Estrutura atrás de um conjunto de bandejas: caixas em mm ({min_x:, max_x:, ...})
+    # -> [parâmetros do gradil, min_x, min_z do envelope]
+    def self.frame_params_from_boxes(boxes, options = {})
       env_min_x = boxes.map { |b| b[:min_x] }.min
       env_max_x = boxes.map { |b| b[:max_x] }.max
       env_min_z = boxes.map { |b| b[:min_z] }.min
@@ -244,6 +208,49 @@ module CS_ACM360_BETA
         'trav_v_count'     => x_splits.length,
         'trav_h_count'     => z_splits.length
       }
+      [frame_params, env_min_x, env_min_z]
+    end
+
+    def self.create_frame_from_trays(tray_groups = nil, options = {}, own_operation = true)
+      model = Sketchup.active_model
+      return nil unless model
+
+      groups = tray_groups || model.selection.grep(Sketchup::Group)
+      if groups.empty?
+        # Se nada selecionado, busca todas as bandejas ACM do modelo
+        groups = model.active_entities.grep(Sketchup::Group).select do |g|
+          g.get_attribute(Catalog::ATTR_DICT, 'kind') == 'acm_tray'
+        end
+      end
+
+      if groups.empty?
+        UI.messagebox('Nenhuma bandeja ACM encontrada na seleção ou no modelo.')
+        return nil
+      end
+
+      boxes = []
+      max_return = 50.0
+      groups.each do |g|
+        bb = g.bounds
+        next if bb.empty?
+        raw_json = g.get_attribute(Catalog::ATTR_DICT, 'tray_json')
+        if raw_json
+          parsed = JSON.parse(raw_json) rescue nil
+          if parsed && parsed['edges']
+            ret = parsed['edges'].values.map { |e| e['return_mm'].to_f }.max
+            max_return = [max_return, ret].max if ret
+          end
+        end
+        boxes << {
+          min_x: to_mm(bb.min.x), max_x: to_mm(bb.max.x),
+          min_y: to_mm(bb.min.y), max_y: to_mm(bb.max.y),
+          min_z: to_mm(bb.min.z), max_z: to_mm(bb.max.z)
+        }
+      end
+
+      return nil if boxes.empty?
+
+      frame_params, env_min_x, env_min_z = frame_params_from_boxes(boxes, options)
 
       model.start_operation('Criar Estrutura das Bandejas ACM', true) if own_operation
       begin

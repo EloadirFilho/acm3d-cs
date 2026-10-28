@@ -112,10 +112,7 @@ module CS_ACM360_BETA
         AcmTrayKernel.create_or_update_tray(p.merge('width_mm' => w_mm, 'height_mm' => h_mm,
                                                     'origin_x_mm' => 0, 'origin_y_mm' => 0, 'origin_z_mm' => 0))
       when 'facade'
-        ret = (p['return_mm'] || Settings.get('default_return_mm')).to_f
-        p['cols'] ||= [(w_mm / 1500.0).ceil, 1].max
-        p['rows'] ||= [(h_mm / [Settings.get('acm_sheet_h_mm') - 2 * ret - 20, 300].max).ceil, 1].max
-        AcmTrayKernel.create_facade_grid(p.merge('total_w_mm' => w_mm, 'total_h_mm' => h_mm))
+        AcmTrayKernel.create_facade_grid(facade_params(p, w_mm, h_mm))
       end
       created = ents.to_a - before
       return [] if created.empty?
@@ -130,6 +127,138 @@ module CS_ACM360_BETA
       model.selection.clear
       model.selection.add(created)
       created
+    end
+
+    # Colunas e linhas da fachada: as digitadas ou as que cabem na chapa
+    def facade_params(p, w_mm, h_mm)
+      p = p.dup
+      ret = (p['return_mm'] || Settings.get('default_return_mm')).to_f
+      p['cols'] = [(w_mm / 1500.0).ceil, 1].max if p['cols'].to_i < 1
+      p['rows'] = [(h_mm / [Settings.get('acm_sheet_h_mm') - 2 * ret - 20, 300].max).ceil, 1].max if p['rows'].to_i < 1
+      p.merge('total_w_mm' => w_mm, 'total_h_mm' => h_mm)
+    end
+
+    # --------------------------------------------------------------------------
+    # Fantasma: a peça em caixas semitransparentes, calculada como na criação
+    # (sem geometria). Caixa = [[x0, y0, z0, x1, y1, z1] mm na peça, cor hex].
+    # --------------------------------------------------------------------------
+    GHOST_ALPHA = 90
+    BOX_FACES = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [3, 2, 6, 7], [1, 2, 6, 5], [0, 3, 7, 4]].freeze
+    BOX_EDGES = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]].freeze
+
+    def ghost_boxes(mode, params, w_mm, h_mm)
+      p = (params || {}).merge('width_mm' => w_mm, 'height_mm' => h_mm)
+      case mode
+      when 'frame' then frame_boxes(p)
+      when 'tray' then tray_boxes(AcmTrayKernel.normalize_tray_params(p.merge('origin_x_mm' => 0, 'origin_y_mm' => 0, 'origin_z_mm' => 0)))
+      when 'facade' then facade_boxes(facade_params(p, w_mm, h_mm))
+      else []
+      end
+    end
+
+    def frame_boxes(params)
+      cfg = FrameKernel.normalize_params(params)
+      FrameKernel.compute_frame_tubes(cfg)[:tubes].map do |t|
+        x, y, z = t[:x_mm].to_f, t[:y_mm].to_f, t[:z_mm].to_f
+        [[x, y, z, x + t[:w_mm].to_f, y + t[:d_mm].to_f, z + t[:h_mm].to_f], FrameKernel.resolve_tube_color(t, cfg['color_mode'])]
+      end
+    end
+
+    # Face e retornos com dobra (abas e recortes não entram no fantasma)
+    def tray_boxes(cfg)
+      ox, oy, oz = cfg.values_at('origin_x_mm', 'origin_y_mm', 'origin_z_mm').map(&:to_f)
+      w, h, th = cfg.values_at('width_mm', 'height_mm', 'thickness_mm').map(&:to_f)
+      color = cfg['color_hex']
+      boxes = [[[ox, oy, oz, ox + w, oy + th, oz + h], color]]
+      (cfg['edges'] || {}).each do |side, e|
+        next unless %w[dobra dobra_aba].include?(e['type']) && e['return_mm'].to_f > 0
+        y0, y1 = oy + th, oy + th + e['return_mm'].to_f
+        box = case side
+              when 'inf' then [ox, y0, oz, ox + w, y1, oz + th]
+              when 'sup' then [ox, y0, oz + h - th, ox + w, y1, oz + h]
+              when 'esq' then [ox, y0, oz, ox + th, y1, oz + h]
+              when 'dir' then [ox + w - th, y0, oz, ox + w, y1, oz + h]
+              end
+        boxes << [box, color] if box
+      end
+      boxes
+    end
+
+    # Mesma malha de AcmTrayKernel.create_facade_grid, com a estrutura atrás
+    def facade_boxes(gp)
+      cols = gp['cols'].to_i.clamp(1, 20)
+      rows = gp['rows'].to_i.clamp(1, 10)
+      joint = (gp['joint_mm'] || Settings.get('default_joint_mm')).to_f.clamp(0.0, 50.0)
+      ret = (gp['return_mm'] || Settings.get('default_return_mm')).to_f.clamp(15.0, 300.0)
+      tw = (gp['total_w_mm'].to_f - (cols - 1) * joint) / cols
+      th = (gp['total_h_mm'].to_f - (rows - 1) * joint) / rows
+      edge = { 'type' => 'dobra', 'return_mm' => ret }
+      trays = (0...rows).flat_map do |r|
+        (0...cols).map do |c|
+          tray_boxes(AcmTrayKernel.normalize_tray_params(
+            'width_mm' => tw, 'height_mm' => th, 'origin_x_mm' => c * (tw + joint), 'origin_y_mm' => 0.0,
+            'origin_z_mm' => r * (th + joint), 'color_hex' => gp['color_hex'] || '#27272A',
+            'edges' => { 'sup' => edge, 'inf' => edge, 'esq' => edge, 'dir' => edge }
+          ))
+        end
+      end
+      boxes = trays.flatten(1)
+      return boxes if gp['generate_frame'] == false
+      env = trays.map do |tb|
+        lo = (0..2).map { |i| tb.map { |b, _| b[i] }.min }
+        hi = (3..5).map { |i| tb.map { |b, _| b[i] }.max }
+        { min_x: lo[0], max_x: hi[0], min_y: lo[1], max_y: hi[1], min_z: lo[2], max_z: hi[2] }
+      end
+      fp, min_x, min_z = AcmTrayKernel.frame_params_from_boxes(env, gp)
+      boxes + frame_boxes(fp).map { |b, c| [[b[0] + min_x, b[1], b[2] + min_z, b[3] + min_x, b[4], b[5] + min_z], c] }
+    end
+
+    # Mesmo posicionamento de create_rect, a partir das caixas
+    def ghost_transform(boxes, origin, axes, on_face)
+      return nil if boxes.empty?
+      lo = (0..2).map { |i| boxes.map { |b, _| b[i] }.min }
+      hi_y = boxes.map { |b, _| b[4] }.max
+      shift = Geom::Vector3d.new(-lo[0].mm, (on_face ? -hi_y : -lo[1]).mm, -lo[2].mm)
+      u, w, v = axes
+      Geom::Transformation.axes(origin, u, w, v) * Geom::Transformation.translation(shift)
+    end
+
+    def ghost_extents(bb, ghost)
+      return bb unless ghost && ghost[1]
+      boxes, tr = ghost
+      boxes.each do |b, _|
+        bb.add(Geom::Point3d.new(b[0].mm, b[1].mm, b[2].mm).transform(tr))
+        bb.add(Geom::Point3d.new(b[3].mm, b[4].mm, b[5].mm).transform(tr))
+      end
+      bb
+    end
+
+    def hex_color(hex, alpha)
+      h = hex.to_s.delete('#')
+      c = h =~ /\A\h{6}\z/ ? Sketchup::Color.new(h[0, 2].hex, h[2, 2].hex, h[4, 2].hex) : Sketchup::Color.new(PREVIEW.red, PREVIEW.green, PREVIEW.blue)
+      c.alpha = alpha
+      c
+    end
+
+    def draw_ghost(view, boxes, tr)
+      return unless boxes && tr
+      fills = Hash.new { |hh, k| hh[k] = [] }
+      lines = []
+      boxes.each do |b, color|
+        x0, y0, z0, x1, y1, z1 = b
+        c = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]]
+            .map { |q| Geom::Point3d.new(q[0].mm, q[1].mm, q[2].mm).transform(tr) }
+        BOX_FACES.each { |f| fills[color].concat(f.map { |i| c[i] }) }
+        BOX_EDGES.each { |a, z| lines << c[a] << c[z] }
+      end
+      fills.each do |color, pts|
+        view.drawing_color = hex_color(color, GHOST_ALPHA)
+        view.draw(GL_QUADS, pts)
+      end
+      view.line_width = 1
+      view.line_stipple = ''
+      view.drawing_color = Sketchup::Color.new(15, 23, 42, 150)
+      view.draw(GL_LINES, lines)
     end
 
     # Tubo avulso com o eixo de p1 a p2 (centro da seção na linha). Corta nas interferências.
@@ -180,11 +309,9 @@ module CS_ACM360_BETA
       }.transform_values { |p| Geom::Point3d.new(p.map(&:mm)).transform(tr) }
     end
 
-    # Novo tamanho na direção da alça; esq/inf mantêm a borda oposta parada
-    def resize(grp, side, new_mm)
-      new_mm = new_mm.to_f
-      return 'Medida mínima: 100 mm.' if new_mm < MIN_MM
-      model = Sketchup.active_model
+    # Parâmetros da peça com o novo tamanho; esq/inf mantêm a borda oposta parada.
+    # shift_mm: quanto a estrutura anda nos próprios eixos (a bandeja anda pela origem).
+    def resize_plan(grp, side, new_mm)
       kind = grp.get_attribute(Catalog::ATTR_DICT, 'kind')
       horiz = %w[esq dir].include?(side)
       key = horiz ? 'width_mm' : 'height_mm'
@@ -197,13 +324,8 @@ module CS_ACM360_BETA
         elsif side == 'inf' && params['custom_h_zs_mm'].is_a?(Array)
           params['custom_h_zs_mm'] = params['custom_h_zs_mm'].map { |z| z.to_f + delta }
         end
-        FrameKernel.create_or_update_frame(params, grp)
-        if %w[esq inf].include?(side) && delta.abs > 1e-6
-          axis = (horiz ? grp.transformation.xaxis : grp.transformation.zaxis).normalize
-          model.start_operation('CS ACM360: Esticar', true, false, true)
-          grp.transform!(Geom::Transformation.translation(LiveTool.scale(axis, -delta.mm)))
-          model.commit_operation
-        end
+        shift = %w[esq inf].include?(side) ? -delta : 0.0
+        { kind: kind, params: params, shift_mm: horiz ? [shift, 0.0, 0.0] : [0.0, 0.0, shift] }
       elsif kind == 'acm_tray'
         cfg = HardwareFasteners.tray_cfg(grp)
         delta = new_mm - cfg[key].to_f
@@ -215,11 +337,35 @@ module CS_ACM360_BETA
           cfg['origin_z_mm'] = cfg['origin_z_mm'].to_f - delta
           cfg['cutouts'] = Array(cfg['cutouts']).map { |c| c.merge('pts' => c['pts'].map { |u, v| [u, v + delta] }) }
         end
-        AcmTrayKernel.create_or_update_tray(cfg, grp)
-      else
-        return 'Selecione uma estrutura ou bandeja do plugin.'
+        { kind: kind, params: cfg, shift_mm: [0.0, 0.0, 0.0] }
       end
-      "#{horiz ? 'Largura' : 'Altura'}: #{new_mm.round(1)} mm"
+    end
+
+    def resize(grp, side, new_mm)
+      new_mm = new_mm.to_f
+      return 'Medida mínima: 100 mm.' if new_mm < MIN_MM
+      plan = resize_plan(grp, side, new_mm)
+      return 'Selecione uma estrutura ou bandeja do plugin.' unless plan
+      if plan[:kind] == 'parametric_frame'
+        FrameKernel.create_or_update_frame(plan[:params], grp)
+        unless plan[:shift_mm].all?(&:zero?)
+          model = Sketchup.active_model
+          model.start_operation('CS ACM360: Esticar', true, false, true)
+          grp.transformation = grp.transformation * Geom::Transformation.translation(Geom::Vector3d.new(plan[:shift_mm].map(&:mm)))
+          model.commit_operation
+        end
+      else
+        AcmTrayKernel.create_or_update_tray(plan[:params], grp)
+      end
+      "#{%w[esq dir].include?(side) ? 'Largura' : 'Altura'}: #{new_mm.round(1)} mm"
+    end
+
+    # Fantasma da peça esticada: [caixas, transformação até o modelo]
+    def resize_ghost(grp, side, new_mm, tr = grp.transformation)
+      plan = resize_plan(grp, side, [new_mm.to_f, MIN_MM].max)
+      return nil unless plan
+      boxes = plan[:kind] == 'parametric_frame' ? frame_boxes(plan[:params]) : tray_boxes(plan[:params])
+      [boxes, tr * Geom::Transformation.translation(Geom::Vector3d.new(plan[:shift_mm].map(&:mm)))]
     end
 
     # --------------------------------------------------------------------------
@@ -339,7 +485,7 @@ module CS_ACM360_BETA
 
       def reset
         @state = 0
-        @p1 = @p2 = @axes = nil
+        @p1 = @p2 = @axes = @ghost = @ghost_key = nil
         @on_face = false
         Sketchup.vcb_label = { 'facade' => 'Larg;Alt;Col;Lin (mm)', 'frame' => 'Larg;Alt;Vert;Horiz' }[@mode] || 'Largura;Altura (mm)'
         status("clique no primeiro canto (numa face, desenha encostado nela).")
@@ -371,6 +517,7 @@ module CS_ACM360_BETA
         else return false
         end
         set_trav(v, h)
+        update_ghost
         status(@state.zero? ? 'clique no primeiro canto.' : 'clique no canto oposto ou digite a medida.')
         view.invalidate
         true
@@ -389,6 +536,7 @@ module CS_ACM360_BETA
           if @p2
             _o, w, h = LiveTool.rect_from(@p1, @p2, @axes)
             Sketchup.vcb_value = "#{LiveTool.fmt(w)};#{LiveTool.fmt(h)}"
+            update_ghost
           end
         end
         view.invalidate
@@ -455,19 +603,35 @@ module CS_ACM360_BETA
         [a, b, c, e]
       end
 
+      # Peça semitransparente no lugar onde vai nascer (só recalcula se mudou)
+      def update_ghost
+        return @ghost = nil unless @p2
+        origin, w, h = LiveTool.rect_from(@p1, @p2, @axes)
+        return @ghost = nil if w < MIN_MM || h < MIN_MM
+        key = [w, h, @params.hash, origin.to_a]
+        return if @ghost_key == key
+        @ghost_key = key
+        boxes = LiveTool.ghost_boxes(@mode, @params, w, h)
+        @ghost = [boxes, LiveTool.ghost_transform(boxes, origin, @axes, @on_face)]
+      rescue StandardError
+        @ghost = nil
+      end
+
       def draw(view)
         @ip.draw(view) if @state.zero? && @ip.display?
         pts = corners
         return unless pts
+        LiveTool.draw_ghost(view, *@ghost) if @ghost
         view.drawing_color = PREVIEW
         view.line_width = 2
+        view.line_stipple = @ghost ? '-' : ''
         view.draw(GL_LINE_LOOP, pts)
-        draw_trav(view, pts) if @mode == 'frame'
+        view.line_stipple = ''
+        draw_trav(view, pts) if @mode == 'frame' && !@ghost
         _o, w, h = LiveTool.rect_from(@p1, @p2, @axes)
         mid = Geom.linear_combination(0.5, pts[0], 0.5, pts[2])
         label = "#{LiveTool.fmt(w)} × #{LiveTool.fmt(h)} mm"
-        label += "
-#{trav_text}" if @mode == 'frame'
+        label += "\n#{trav_text}" if @mode == 'frame'
         view.draw_text(view.screen_coords(mid), label, size: 14, color: PREVIEW)
       end
 
@@ -487,7 +651,7 @@ module CS_ACM360_BETA
       def getExtents
         bb = Geom::BoundingBox.new
         (corners || []).each { |p| bb.add(p) }
-        bb
+        LiveTool.ghost_extents(bb, @ghost)
       end
     end
 
@@ -595,8 +759,9 @@ module CS_ACM360_BETA
         @drag = nil
         @hover = nil
         @new_mm = nil
+        @ghost = nil
         Sketchup.vcb_label = 'Nova medida (mm)'
-        Sketchup.status_text = @target ? 'Esticar: clique numa alça vermelha, mova e clique de novo (ou digite a medida).' :
+        Sketchup.status_text = @target ? 'Esticar: arraste uma alça vermelha (ou clique, mova e clique; ou digite a medida).' :
                                          'Esticar: passe o mouse sobre uma estrutura ou bandeja do plugin.'
       end
 
@@ -619,15 +784,19 @@ module CS_ACM360_BETA
 
       def onMouseMove(_flags, x, y, view)
         if @drag
-          @new_mm = drag_size(view, x, y)
-          Sketchup.vcb_value = LiveTool.fmt(@new_mm) if @new_mm
+          mm = drag_size(view, x, y)
+          if mm && mm != @new_mm
+            @new_mm = mm
+            Sketchup.vcb_value = LiveTool.fmt(mm)
+            @ghost = (LiveTool.resize_ghost(@target[0], @drag[:side], mm, @target[1]) rescue nil)
+          end
         else
           @ip.pick(view, x, y)
           if (g = LiveTool.picked_group(@ip, KINDS))
             @target = g
           end
           @hover = handles.find { |_, p| view.screen_coords(p).distance([x, y, 0]) < 12 }&.first
-          Sketchup.status_text = 'Esticar: clique numa alça vermelha, mova e clique de novo (ou digite a medida).' if @target
+          Sketchup.status_text = 'Esticar: arraste uma alça vermelha (ou clique, mova e clique; ou digite a medida).' if @target
         end
         view.invalidate
       end
@@ -637,9 +806,16 @@ module CS_ACM360_BETA
           apply(@new_mm) if @new_mm
         elsif @hover
           box = LiveTool.stretch_box(@target[0])
-          @drag = { side: @hover, base: %w[esq dir].include?(@hover) ? box[:w] : box[:h], start: handles[@hover] }
-          Sketchup.status_text = 'Esticar: mova e clique, ou digite a nova medida.'
+          @drag = { side: @hover, base: %w[esq dir].include?(@hover) ? box[:w] : box[:h], start: handles[@hover], press: [x, y] }
+          Sketchup.status_text = 'Esticar: solte, ou mova e clique, ou digite a nova medida.'
         end
+        view.invalidate
+      end
+
+      # Arrastando com o botão apertado: soltar longe da alça confirma
+      def onLButtonUp(_flags, x, y, view)
+        return unless @drag && @drag[:press] && @new_mm
+        apply(@new_mm) if Math.hypot(x - @drag[:press][0], y - @drag[:press][1]) > 6
         view.invalidate
       end
 
@@ -671,9 +847,11 @@ module CS_ACM360_BETA
         StudioDialog.push_state_to_ui if defined?(StudioDialog)
         @drag = nil
         @new_mm = nil
+        @ghost = nil
       end
 
       def draw(view)
+        LiveTool.draw_ghost(view, *@ghost) if @ghost
         hs = handles
         return if hs.empty?
         hs.each do |side, p|
@@ -687,7 +865,7 @@ module CS_ACM360_BETA
       def getExtents
         bb = Geom::BoundingBox.new
         handles.each_value { |p| bb.add(p) }
-        bb
+        LiveTool.ghost_extents(bb, @ghost)
       end
     end
 

@@ -255,6 +255,7 @@ module CSBetaTests
       run_cutouts(model)
       run_live(model)
       run_panels(model)
+      run_ghost(model)
     end
 
     # --------------------------------------------------------------------------
@@ -272,6 +273,98 @@ module CSBetaTests
 
     def near(a, b, tol = 0.5)
       (a - b).abs <= tol
+    end
+
+    # Fantasma das ferramentas (x >= 140 m): cai onde a peça nasce
+    def bb_mm(bb)
+      [bb.min.to_a.map(&:to_mm), bb.max.to_a.map(&:to_mm)]
+    end
+
+    def same_box(a, b, tol = 1.0)
+      a.flatten.zip(b.flatten).all? { |x, y| (x - y).abs <= tol }
+    end
+
+    def run_ghost(model)
+      lt = P::LiveTool
+      [['frame', { 'name' => 'M1 Fantasma Gradil', 'trav_v_count' => 3 }, 140_000, Geom::Vector3d.new(0, -1, 0), 2400, 1300],
+       ['tray', { 'name' => 'M1 Fantasma Bandeja', 'code' => 'FB' }, 145_000, Geom::Vector3d.new(1, 0, 0), 1200, 700],
+       ['facade', { 'cols' => 2, 'rows' => 2 }, 150_000, Geom::Vector3d.new(0, -1, 0), 3000, 2000]].each do |mode, prm, x0, normal, w, h|
+        name = "M1: fantasma do(a) #{mode} cai onde a peça nasce"
+        guard(name) do
+          axes = lt.drawing_axes(normal)
+          origin = pt(x0, 3000, 500)
+          boxes = lt.ghost_boxes(mode, prm, w, h)
+          gtr = lt.ghost_transform(boxes, origin, axes, true)
+          ghost = bb_mm(lt.ghost_extents(Geom::BoundingBox.new, [boxes, gtr]))
+          real = bounds_mm(lt.create_rect(mode, prm, origin, w, h, axes, on_face: true))
+          check(name, same_box(ghost, real), { 'fantasma' => ghost, 'real' => real, 'caixas' => boxes.size })
+        end
+      end
+
+      guard('M1: fantasma ao esticar = peça esticada') do
+        axes = lt.drawing_axes(nil)
+        o, w, h = lt.rect_from(pt(160_000, 0, 0), pt(162_000, 0, 1000), axes)
+        frame = lt.create_rect('frame', { 'name' => 'M1 Fantasma Esticar' }, o, w, h, axes).first
+        res = %w[esq inf dir].map do |side|
+          g = lt.resize_ghost(frame, side, 2600)
+          ghost = bb_mm(lt.ghost_extents(Geom::BoundingBox.new, g))
+          lt.resize(frame, side, 2600)
+          [side, same_box(ghost, bounds_mm(frame)), ghost, bounds_mm(frame)]
+        end
+        check('M1: fantasma ao esticar = peça esticada', res.all? { |r| r[1] }, res)
+      end
+
+      guard('M1: esticar arrastando com o botão apertado') do
+        view = model.active_view
+        axes = lt.drawing_axes(nil)
+        o, w, h = lt.rect_from(pt(170_000, 0, 0), pt(172_000, 0, 1000), axes)
+        frame = lt.create_rect('frame', { 'name' => 'M1 Arrastar' }, o, w, h, axes).first
+        view.camera = Sketchup::Camera.new(pt(171_000, -9000, 500), pt(171_000, 0, 500), Z_AXIS)
+        model.selection.clear
+        model.selection.add(frame)
+        tool = P::LiveTool::StretchTool.new
+        model.select_tool(tool)
+        sc = ->(q) { c = view.screen_coords(q); [c.x.round, c.y.round] }
+        hx, hy = sc.call(lt.handle_points(frame)['dir'])
+        tool.onMouseMove(0, hx, hy, view)
+        tool.onLButtonDown(0, hx, hy, view)
+        ex, ey = sc.call(pt(172_500, 0, 500))
+        tool.onMouseMove(0, ex, ey, view)
+        ghost_ok = !tool.instance_variable_get(:@ghost).nil?
+        tool.draw(view)
+        img = File.join(OUT, 'fantasma_esticar.png')
+        view.refresh
+        view.write_image(filename: img, width: 900, height: 600, antialias: true) rescue nil
+        tool.onLButtonUp(0, ex, ey, view)
+        model.select_tool(nil)
+        width = JSON.parse(frame.get_attribute('CS_ACM360_DATA', 'params_json'))['width_mm']
+        check('M1: esticar arrastando com o botão apertado', ghost_ok && (width - 2500).abs < 40,
+              { 'fantasma' => ghost_ok, 'largura' => width, 'imagem' => File.exist?(img) })
+      end
+
+      guard('M1: gradil mostra o fantasma antes do 2º clique') do
+        view = model.active_view
+        view.camera = Sketchup::Camera.new(pt(181_500, -7000, 2500), pt(181_500, 0, 700), Z_AXIS)
+        tool = P::LiveTool::RectTool.new('frame', { 'name' => 'M1 Fantasma Tela', 'trav_v_count' => 2, 'trav_h_count' => 1 })
+        model.select_tool(tool)
+        sc = ->(q) { c = view.screen_coords(q); [c.x.round, c.y.round] }
+        x1, y1 = sc.call(pt(180_000, 0, 0))
+        tool.onMouseMove(0, x1, y1, view)
+        tool.onLButtonDown(0, x1, y1, view)
+        x2, y2 = sc.call(pt(183_000, 0, 1500))
+        tool.onMouseMove(0, x2, y2, view)
+        ghost = tool.instance_variable_get(:@ghost)
+        n1 = ghost && ghost[0].size
+        tool.onKeyDown(VK_UP, 0, 0, view)
+        n2 = tool.instance_variable_get(:@ghost)[0].size
+        tool.draw(view)
+        img = File.join(OUT, 'fantasma_gradil.png')
+        view.refresh
+        view.write_image(filename: img, width: 900, height: 600, antialias: true) rescue nil
+        model.select_tool(nil)
+        check('M1: gradil mostra o fantasma antes do 2º clique', n1.to_i > 4 && n2.to_i > n1.to_i,
+              { 'tubos' => n1, 'depois_da_seta' => n2, 'imagem' => File.exist?(img) })
+      end
     end
 
     # Menu radial e painel lateral (x >= 120 m)
