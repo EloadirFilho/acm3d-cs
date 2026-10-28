@@ -222,7 +222,7 @@ flowchart TD
 - "Perímetro, 3 por lado" em um quadro gera 12 fixadores (ou 8 + cantos, conforme opção) nas posições certas.
 - O relatório soma parafusos e buchas por tamanho.
 
-**Status (27/10/2026): entregue no BETA 1.3.0** (falta só a colocação por clique, que vem com o M1)
+**Status (27/10/2026): entregue no BETA 1.3.0**; colocação por clique entregue no BETA 1.5.0 (M1)
 - Três tipos, desenhados pelo plugin como cantoneira em L (sem os blocos de terceiros): **cantoneira** bandeja → estrutura (no fundo de cada retorno com dobra), **ancoragem** estrutura → parede e **espera/afastador** (nos tubos verticais; sem verticais, nos horizontais). Ancoragem e espera não convivem no mesmo grupo.
 - Distribuição por distância: margem nas pontas e passo nunca maior que o espaçamento, no mínimo 2 por trecho (`HardwareFasteners.positions` = `fastenerPositions` em `acm360-report.js`).
 - Configurações (M12): espaçamento/recuo das cantoneiras, espaçamento/recuo das ancoragens, afastamento da espera, medidas de cada L (abas, comprimento, espessura) e consumo por peça. Salvar redesenha os fixadores do modelo.
@@ -344,6 +344,15 @@ flowchart TD
 - Criar um gradil em 3 cliques + 1 medida digitada.
 - Esticar a borda direita com o mouse atualiza a estrutura e a lista de corte.
 - Esc cancela sem deixar geometria solta.
+
+**Status (27/10/2026): entregue no BETA 1.5.0** (decisão da CS: as quatro ferramentas, desenhando na face clicada; menu radial e painel lateral HTML adiados)
+- `lib/live_tool.rb`. A geometria fica em funções do módulo (pontos 3D → peças), usadas pelas ferramentas e pelos testes; as classes `Sketchup::Tool` só tratam mouse, teclado e o desenho de prévia.
+- **Desenhar gradil / bandeja / fachada**: 2 cliques nos cantos ou 1 clique + medida no VCB (`3000;1500`; fachada `3600;1800;3;2` = largura;altura;colunas;linhas). Clicando numa face, a peça é desenhada no plano dela com o fundo encostado (parede, teto ou piso); no vazio, no plano frontal X-Z. Usa os campos do painel (perfil, retorno, nome) pelo botão *✏ Desenhar na Tela*.
+- **Tubo por 2 pontos**: eixo do tubo na linha clicada, com inferência do SketchUp; tubos em sequência (o próximo começa onde o anterior terminou) e cada um já sai cortado nas interferências (M5).
+- **Alças para esticar**: alças vermelhas nas 4 bordas de estrutura/bandeja; arrastar ou digitar a nova medida. Esquerda/baixo mantêm a borda oposta parada (recortes da bandeja e posições de tubos personalizados acompanham). Mínimo 100 mm.
+- **Fixador no clique**: cantoneira no retorno da bandeja, ancoragem/espera no tubo da estrutura; Tab troca o tipo. Fica guardado como fixador manual (`fasteners_manual`), sobrevive a regerar a peça e entra no relatório.
+- Menu *Desenhar na Tela*, botões na barra, item *Esticar com Alças* no clique direito.
+- Testes no SketchUp: eixos na parede, gradil/bandeja/fachada por 2 cantos, fundo encostado na parede, tubo cortado no vizinho, esticar pelas 2 bordas, fixador no clique mantido ao regerar e a ferramenta com cliques simulados na tela e medida digitada.
 
 ---
 

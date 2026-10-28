@@ -283,6 +283,8 @@
           </div>
           <div class="field" style="justify-content:flex-end;">
             <button type="button" class="btn primary" onclick="CSStudio.submitFrame(false)">Gerar Estrutura no 3D</button>
+            <button type="button" class="btn" onclick="CSStudio.submitFrame(false, true)">✏ Desenhar na Tela</button>
+            <button type="button" class="btn" onclick="CSStudio.startTool('stretch')">↔ Esticar com Alças</button>
           </div>
         </div>
       </div>
@@ -328,6 +330,7 @@
         </div>
         <div class="btn-row" style="margin-top:12px;">
           <button type="button" class="btn primary" onclick="CSStudio.submitTube()">Criar Tubo Avulso</button>
+          <button type="button" class="btn" onclick="CSStudio.submitTube(true)">✏ Desenhar por 2 Pontos</button>
           <button type="button" class="btn" onclick="CSStudio.callRuby('cut_interferences')">Cortar nas Interferências (Seleção)</button>
         </div>
         <p class="hint">Mova e gire o tubo com as ferramentas do SketchUp até a posição; depois selecione e use Cortar nas Interferências: cada ponta é aparada na face do tubo vizinho (ou estendida até encostar, se o vão for pequeno). Corte composto e ângulo acima de 75° ficam como estão, com aviso.</p>
@@ -341,6 +344,12 @@
           <button type="button" class="btn" onclick="CSStudio.callRuby('distribute_fasteners', 'ancoragem')">Ancoragens (Estrutura → Parede)</button>
           <button type="button" class="btn" onclick="CSStudio.callRuby('distribute_fasteners', 'espera')">Esperas / Afastadores</button>
           <button type="button" class="btn danger" onclick="CSStudio.callRuby('remove_fasteners')">Remover Fixadores</button>
+        </div>
+        <div class="btn-row" style="margin-top:8px;">
+          <span class="hint" style="margin:0 6px 0 0;">No clique:</span>
+          <button type="button" class="btn small" onclick="CSStudio.startTool('fastener', {type: 'cantoneira'})">Cantoneira</button>
+          <button type="button" class="btn small" onclick="CSStudio.startTool('fastener', {type: 'ancoragem'})">Ancoragem</button>
+          <button type="button" class="btn small" onclick="CSStudio.startTool('fastener', {type: 'espera'})">Espera</button>
         </div>
         <p class="hint">Aplica na seleção (sem seleção, pergunta se aplica no modelo todo). Os fixadores acompanham a peça ao editar e entram no relatório com parafusos, buchas e rebites. Medidas e espaçamentos ficam em Configurações.</p>
       </div>
@@ -399,6 +408,8 @@
         </div>
         <div class="btn-row" style="margin-top:12px;">
           <button type="button" class="btn primary" onclick="CSStudio.submitTray()">Criar Bandeja 3D no SketchUp</button>
+          <button type="button" class="btn" onclick="CSStudio.submitTray(true)">✏ Desenhar na Tela</button>
+          <button type="button" class="btn" onclick="CSStudio.startTool('stretch')">↔ Esticar com Alças</button>
           <button type="button" class="btn" onclick="CSStudio.callRuby('unfold_selected_3d')">Planificar Bandeja Selecionada no 3D</button>
           <button type="button" class="btn" onclick="CSStudio.callRuby('export_dxf')">Exportar DXF CNC (AC1009)</button>
         </div>
@@ -449,6 +460,7 @@
           </div>
           <div class="field" style="justify-content:flex-end;">
             <button type="button" class="btn primary" onclick="CSStudio.submitFacadeGrid()">Criar Painel ACM + Estrutura no 3D</button>
+            <button type="button" class="btn" onclick="CSStudio.submitFacadeGrid(true)">✏ Desenhar na Tela</button>
           </div>
         </div>
       </div>
@@ -988,7 +1000,15 @@
         this.settingsDirty = false;
         this.callRuby('save_settings', JSON.stringify(this.settingsDraft));
       },
-      submitFrame: function(updateSel) {
+      // M1: com draw, abre a ferramenta na tela usando os campos do painel
+      startTool: function(tool, params) {
+        return this.callRuby('start_tool', JSON.stringify({ tool: tool, params: params || {} }));
+      },
+      sendOrDraw: function(action, tool, payload, draw) {
+        if (draw) return this.startTool(tool, payload);
+        return this.callRuby(action, JSON.stringify(payload));
+      },
+      submitFrame: function(updateSel, draw) {
         var payload = {
           name: document.getElementById('fName').value,
           width_mm: Number(document.getElementById('fWidth').value),
@@ -1006,9 +1026,9 @@
           color_mode: document.getElementById('fColorMode').value,
           update_selected: !!updateSel
         };
-        this.callRuby('create_or_update_frame', JSON.stringify(payload));
+        this.sendOrDraw('create_or_update_frame', 'frame', payload, draw);
       },
-      submitTube: function() {
+      submitTube: function(draw) {
         var payload = {
           name: document.getElementById('uName').value,
           profile_id: Number(document.getElementById('uProfile').value || 5),
@@ -1018,9 +1038,9 @@
           cut_b_deg: Number(document.getElementById('uCutB').value) || 0,
           material: document.getElementById('uMaterial').value
         };
-        this.callRuby('create_single_tube', JSON.stringify(payload));
+        this.sendOrDraw('create_single_tube', 'tube', payload, draw);
       },
-      submitTray: function() {
+      submitTray: function(draw) {
         var payload = {
           code: document.getElementById('tCode').value,
           name: document.getElementById('tName').value,
@@ -1033,9 +1053,9 @@
           acm_preset: document.getElementById('tPreset').value,
           thickness_mm: (this.currentTrayPreset() || {}).thickness_mm
         };
-        this.callRuby('create_or_update_tray', JSON.stringify(payload));
+        this.sendOrDraw('create_or_update_tray', 'tray', payload, draw);
       },
-      submitFacadeGrid: function() {
+      submitFacadeGrid: function(draw) {
         var payload = {
           total_w_mm: Number(document.getElementById('gTotalW').value),
           total_h_mm: Number(document.getElementById('gTotalH').value),
@@ -1045,7 +1065,7 @@
           return_mm: Number(document.getElementById('gReturn').value),
           generate_frame: true
         };
-        this.callRuby('create_facade_grid', JSON.stringify(payload));
+        this.sendOrDraw('create_facade_grid', 'facade', payload, draw);
       },
       // --- M8: relatório calculado em acm360-report.js (mesmo código do painel web) ---
       report: null,

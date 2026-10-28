@@ -88,6 +88,12 @@ module CS_ACM360_BETA
         UnfoldDxfEngine.export_erp_json_dialog
       end
 
+      # --- M1: ferramentas na tela, com os campos do painel ---
+      dlg.add_action_callback('start_tool') do |_ctx, json_str|
+        data = JSON.parse(json_str.to_s) rescue {}
+        LiveTool.start(data['tool'], data['params'].is_a?(Hash) ? data['params'] : {})
+      end
+
       # --- M5/M6: corte nas interferências e recortes nas bandejas ---
       {
         'cut_interferences'   => -> { InterferenceKernel.cut_selection },

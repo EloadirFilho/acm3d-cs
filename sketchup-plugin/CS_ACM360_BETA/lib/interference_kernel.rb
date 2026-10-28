@@ -22,9 +22,10 @@ module CS_ACM360_BETA
     # --------------------------------------------------------------------------
     # Ação de menu/painel
     # --------------------------------------------------------------------------
-    def cut_selection(model = Sketchup.active_model)
+    # only: tubos a cortar (ex.: o tubo recém-desenhado no Construtor ao Vivo); sem ele, a seleção
+    def cut_selection(model = Sketchup.active_model, only: nil)
       targets = []
-      each_tube_group(model.entities, selection: model.selection.to_a) do |g, tr, kind, selected|
+      each_tube_group(model.entities, selection: only || model.selection.to_a) do |g, tr, kind, selected|
         targets << [g, tr] if selected && kind == 'single_tube'
       end
       return 'Selecione um ou mais tubos avulsos para cortar nas interferências.' if targets.empty?

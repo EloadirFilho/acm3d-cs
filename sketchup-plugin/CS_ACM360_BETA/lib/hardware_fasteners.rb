@@ -114,6 +114,7 @@ module CS_ACM360_BETA
       groups.each do |g|
         clear_arrays(g)
         g.delete_attribute(Catalog::ATTR_DICT, 'fasteners')
+        g.delete_attribute(Catalog::ATTR_DICT, MANUAL_KEY)
       end
       model.commit_operation
     end
@@ -121,14 +122,18 @@ module CS_ACM360_BETA
     # Redesenha os fixadores já aplicados (chamado ao regerar estrutura ou bandeja,
     # dentro da operação do kernel). Retorna quantos foram desenhados.
     def reapply(group)
-      return 0 if applied_types(group).empty?
+      return 0 unless any_fasteners?(group)
       draw_fasteners(group)
+    end
+
+    def any_fasteners?(group)
+      !applied_types(group).empty? || !manual_list(group).empty?
     end
 
     # Redesenha todos os fixadores do modelo (após mudar medidas ou espaçamentos nas Configurações)
     def redraw_all(model = Sketchup.active_model)
       groups = []
-      UnfoldDxfEngine.each_cs_group(model.entities) { |g, _| groups << g unless applied_types(g).empty? }
+      UnfoldDxfEngine.each_cs_group(model.entities) { |g, _| groups << g if any_fasteners?(g) }
       return 0 if groups.empty?
       model.start_operation('CS ACM360: Atualizar Fixadores', true)
       n = groups.sum { |g| draw_fasteners(g) }
@@ -165,7 +170,7 @@ module CS_ACM360_BETA
     def remove_from_selection
       model = Sketchup.active_model
       groups = []
-      UnfoldDxfEngine.each_cs_group(model.selection.to_a) { |g, _| groups << g unless applied_types(g).empty? }
+      UnfoldDxfEngine.each_cs_group(model.selection.to_a) { |g, _| groups << g if any_fasteners?(g) }
       return 'Selecione bandejas ou estruturas com fixadores para remover.' if groups.empty?
       remove(groups)
       "Fixadores removidos de #{groups.size} grupo(s)"
@@ -179,7 +184,7 @@ module CS_ACM360_BETA
     def draw_fasteners(group)
       clear_arrays(group)
       kind = group.get_attribute(Catalog::ATTR_DICT, 'kind')
-      applied_types(group).sum do |type|
+      auto = applied_types(group).sum do |type|
         if type == 'cantoneira' && kind == 'acm_tray'
           place_on_tray(group)
         elsif WALL_TYPES.include?(type) && kind == 'parametric_frame'
@@ -188,6 +193,51 @@ module CS_ACM360_BETA
           0
         end
       end
+      auto + draw_manual(group, kind)
+    end
+
+    # --------------------------------------------------------------------------
+    # Fixadores colocados no clique (M1): ficam em 'fasteners_manual' e são
+    # redesenhados junto com a peça. Item: { type, ref (lado da bandeja ou id do tubo), pos_mm }
+    # --------------------------------------------------------------------------
+    MANUAL_KEY = 'fasteners_manual'.freeze
+
+    def manual_list(group)
+      list = JSON.parse(group.get_attribute(Catalog::ATTR_DICT, MANUAL_KEY).to_s) rescue []
+      Array(list).select { |i| i.is_a?(Hash) && TYPES.include?(i['type']) }
+    end
+
+    # Acrescenta um fixador no clique (dentro de uma operação já aberta)
+    def add_manual(group, type, ref, pos_mm)
+      list = manual_list(group) << { 'type' => type.to_s, 'ref' => ref.to_s, 'pos_mm' => pos_mm.to_f.round(1) }
+      group.set_attribute(Catalog::ATTR_DICT, MANUAL_KEY, JSON.generate(list))
+      draw_fasteners(group)
+    end
+
+    def draw_manual(group, kind)
+      list = manual_list(group)
+      return 0 if list.empty?
+      arrays = {}
+      list.sum do |item|
+        type = item['type']
+        spec = Settings.fastener_spec(type)
+        slot = if kind == 'acm_tray' && type == 'cantoneira'
+                 tray_slot(tray_cfg(group), spec, item['ref'])
+               elsif kind == 'parametric_frame' && WALL_TYPES.include?(type)
+                 t = frame_tubes(group).find { |x| x['id'].to_s == item['ref'] }
+                 t && frame_slot(t, spec, type)
+               end
+        # peça mudou e o ponto não existe mais (tubo removido, borda sem dobra): não desenha
+        next 0 unless slot && item['pos_mm'].between?(0, slot[:along])
+        arr = arrays[type] ||= new_array(group, type).tap { |a| a.name += ' (no clique)' }
+        place(arr, slot[:defn], spec, slot[:corner].call(item['pos_mm']), slot[:leg_a], slot[:leg_b])
+        1
+      end
+    end
+
+    def frame_tubes(frame)
+      list = JSON.parse(frame.get_attribute(Catalog::ATTR_DICT, 'tubes_json').to_s) rescue []
+      Array(list).select { |t| t.is_a?(Hash) }
     end
 
     def clear_arrays(group)
@@ -211,30 +261,36 @@ module CS_ACM360_BETA
       spec = Settings.fastener_spec('cantoneira')
       spacing = Settings.get('fastener_spacing_mm').to_f
       margin  = Settings.get('fastener_offset_mm').to_f
-      ox, oy, oz = cfg['origin_x_mm'].to_f, cfg['origin_y_mm'].to_f, cfg['origin_z_mm'].to_f
-      w, h, th = cfg['width_mm'].to_f, cfg['height_mm'].to_f, cfg['thickness_mm'].to_f
-      edges = cfg['edges'] || {}
       arr = new_array(tray, 'cantoneira')
-      back = Geom::Vector3d.new(0, -1, 0)
       n = 0
       %w[inf sup esq dir].each do |side|
-        e = edges[side] || {}
-        next unless %w[dobra dobra_aba].include?(e['type'].to_s) && e['return_mm'].to_f > spec['thickness_mm']
-        y_back = oy + e['return_mm'].to_f
-        # A aba no retorno não passa da face da bandeja (retorno curto)
-        defn = angle_definition('cantoneira', [spec['leg_a_mm'], e['return_mm'].to_f - th].min)
-        along, inward, corner = case side
-                                when 'inf' then [w, [0, 0, 1],  ->(p) { [ox + p, y_back, oz + th] }]
-                                when 'sup' then [w, [0, 0, -1], ->(p) { [ox + p, y_back, oz + h - th] }]
-                                when 'esq' then [h, [1, 0, 0],  ->(p) { [ox + th, y_back, oz + p] }]
-                                else            [h, [-1, 0, 0], ->(p) { [ox + w - th, y_back, oz + p] }]
-                                end
-        positions(along, spacing, margin).each do |p|
-          place(arr, defn, spec, corner.call(p), back, Geom::Vector3d.new(inward))
+        slot = tray_slot(cfg, spec, side)
+        next unless slot
+        positions(slot[:along], spacing, margin).each do |p|
+          place(arr, slot[:defn], spec, slot[:corner].call(p), slot[:leg_a], slot[:leg_b])
           n += 1
         end
       end
       n
+    end
+
+    # Onde vai a cantoneira numa borda da bandeja: comprimento da borda, quina do L
+    # em função da posição ao longo dela e direções das abas. nil se a borda não tem dobra.
+    def tray_slot(cfg, spec, side)
+      ox, oy, oz = cfg['origin_x_mm'].to_f, cfg['origin_y_mm'].to_f, cfg['origin_z_mm'].to_f
+      w, h, th = cfg['width_mm'].to_f, cfg['height_mm'].to_f, cfg['thickness_mm'].to_f
+      e = (cfg['edges'] || {})[side] || {}
+      return nil unless %w[dobra dobra_aba].include?(e['type'].to_s) && e['return_mm'].to_f > spec['thickness_mm']
+      y_back = oy + e['return_mm'].to_f
+      # A aba no retorno não passa da face da bandeja (retorno curto)
+      defn = angle_definition('cantoneira', [spec['leg_a_mm'], e['return_mm'].to_f - th].min)
+      along, inward, corner = case side
+                              when 'inf' then [w, [0, 0, 1],  ->(p) { [ox + p, y_back, oz + th] }]
+                              when 'sup' then [w, [0, 0, -1], ->(p) { [ox + p, y_back, oz + h - th] }]
+                              when 'esq' then [h, [1, 0, 0],  ->(p) { [ox + th, y_back, oz + p] }]
+                              else            [h, [-1, 0, 0], ->(p) { [ox + w - th, y_back, oz + p] }]
+                              end
+      { along: along, corner: corner, defn: defn, leg_a: Geom::Vector3d.new(0, -1, 0), leg_b: Geom::Vector3d.new(inward) }
     end
 
     # Ancoragem/espera nos tubos verticais da estrutura (laterais e montantes): uma aba
@@ -242,38 +298,42 @@ module CS_ACM360_BETA
     def place_on_frame(frame, type)
       tubes = JSON.parse(frame.get_attribute(Catalog::ATTR_DICT, 'tubes_json').to_s) rescue []
       spec = Settings.fastener_spec(type)
-      standoff = type == 'espera' ? Settings.get('standoff_mm').to_f : 0.0
       spacing = Settings.get('anchor_spacing_mm').to_f
       margin  = Settings.get('anchor_margin_mm').to_f
       arr = new_array(frame, type)
-      back = Geom::Vector3d.new(0, -1, 0)
       vertical = tubes.select { |t| t['axis'] == 'z' }
       list = vertical.empty? ? tubes : vertical # estrutura sem verticais: usa os horizontais
       n = 0
       list.each do |t|
-        x, y, z = t['x_mm'].to_f, t['y_mm'].to_f, t['z_mm'].to_f
-        wall_y = y + t['d_mm'].to_f + standoff
-        # A aba no tubo não passa da profundidade dele (senão bate na bandeja)
-        defn = angle_definition(type, [spec['leg_a_mm'], t['d_mm'].to_f].min + standoff)
-        if t['axis'] == 'z'
-          left = t['slot'].to_s == 'c1' # lateral esquerda: aba para fora, do lado esquerdo
-          x_face = left ? x : x + t['w_mm'].to_f
-          out = Geom::Vector3d.new(left ? -1 : 1, 0, 0)
-          positions(t['length_mm'].to_f, spacing, margin).each do |p|
-            place(arr, defn, spec, [x_face, wall_y, z + p], back, out)
-            n += 1
-          end
-        else
-          bottom = t['slot'].to_s == 'inf'
-          z_face = bottom ? z : z + t['h_mm'].to_f
-          out = Geom::Vector3d.new(0, 0, bottom ? -1 : 1)
-          positions(t['length_mm'].to_f, spacing, margin).each do |p|
-            place(arr, defn, spec, [x + p, wall_y, z_face], back, out)
-            n += 1
-          end
+        slot = frame_slot(t, spec, type)
+        positions(slot[:along], spacing, margin).each do |p|
+          place(arr, slot[:defn], spec, slot[:corner].call(p), slot[:leg_a], slot[:leg_b])
+          n += 1
         end
       end
       n
+    end
+
+    # Onde vai a ancoragem/espera num tubo: na lateral (vertical) ou em cima/embaixo
+    # (horizontal), com a aba de parede atrás do tubo (mais o afastamento, na espera).
+    def frame_slot(t, spec, type)
+      standoff = type == 'espera' ? Settings.get('standoff_mm').to_f : 0.0
+      x, y, z = t['x_mm'].to_f, t['y_mm'].to_f, t['z_mm'].to_f
+      wall_y = y + t['d_mm'].to_f + standoff
+      # A aba no tubo não passa da profundidade dele (senão bate na bandeja)
+      defn = angle_definition(type, [spec['leg_a_mm'], t['d_mm'].to_f].min + standoff)
+      back = Geom::Vector3d.new(0, -1, 0)
+      if t['axis'] == 'z'
+        left = t['slot'].to_s == 'c1' # lateral esquerda: aba para fora, do lado esquerdo
+        x_face = left ? x : x + t['w_mm'].to_f
+        { along: t['length_mm'].to_f, defn: defn, leg_a: back, leg_b: Geom::Vector3d.new(left ? -1 : 1, 0, 0),
+          corner: ->(p) { [x_face, wall_y, z + p] } }
+      else
+        bottom = t['slot'].to_s == 'inf'
+        z_face = bottom ? z : z + t['h_mm'].to_f
+        { along: t['length_mm'].to_f, defn: defn, leg_a: back, leg_b: Geom::Vector3d.new(0, 0, bottom ? -1 : 1),
+          corner: ->(p) { [x + p, wall_y, z_face] } }
+      end
     end
 
     # Cantoneira em L: aba A ao longo de +Y local, aba B ao longo de +Z local, comprimento em X.

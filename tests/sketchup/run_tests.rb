@@ -253,6 +253,140 @@ module CSBetaTests
 
       run_interference(model)
       run_cutouts(model)
+      run_live(model)
+    end
+
+    # --------------------------------------------------------------------------
+    # M1: Construtor ao Vivo (x >= 50 m)
+    # --------------------------------------------------------------------------
+    def pt(x, y, z)
+      Geom::Point3d.new(x.mm, y.mm, z.mm)
+    end
+
+    def bounds_mm(ents)
+      bb = Geom::BoundingBox.new
+      Array(ents).each { |e| bb.add(e.bounds) }
+      [bb.min.to_a.map(&:to_mm), bb.max.to_a.map(&:to_mm)]
+    end
+
+    def near(a, b, tol = 0.5)
+      (a - b).abs <= tol
+    end
+
+    def run_live(model)
+      lt = P::LiveTool
+      frame = nil
+      tray = nil
+      guard('M1: eixos do plano de desenho') do
+        u, w, v = lt.drawing_axes(Geom::Vector3d.new(1, 0, 0)) # parede voltada para +X
+        du, dw, dv = lt.drawing_axes(nil)
+        ok = u.samedirection?(Y_AXIS) && w.samedirection?(X_AXIS.reverse) && v.samedirection?(Z_AXIS) &&
+             du.samedirection?(X_AXIS) && dw.samedirection?(Y_AXIS) && dv.samedirection?(Z_AXIS)
+        check('M1: eixos do plano de desenho', ok, [u, w, v].map(&:to_a))
+      end
+
+      guard('M1: gradil por 2 cantos no plano frontal') do
+        axes = lt.drawing_axes(nil)
+        origin, w, h = lt.rect_from(pt(53_000, 0, 1500), pt(50_000, 0, 0), axes) # cantos em qualquer ordem
+        created = lt.create_rect('frame', { 'name' => 'M1 Gradil' }, origin, w, h, axes)
+        frame = created.first
+        mn, mx = bounds_mm(created)
+        check('M1: gradil por 2 cantos no plano frontal', created.size == 1 && near(mn[0], 50_000) && near(mx[0], 53_000) &&
+              near(mn[2], 0) && near(mx[2], 1500) && near(mn[1], 0), { 'min' => mn, 'max' => mx })
+      end
+
+      guard('M1: na parede, o fundo encosta nela') do
+        axes = lt.drawing_axes(Geom::Vector3d.new(0, -1, 0))
+        origin, w, h = lt.rect_from(pt(50_000, 5000, 2000), pt(52_000, 5000, 3000), axes)
+        c1 = lt.create_rect('frame', { 'name' => 'M1 Gradil Parede' }, origin, w, h, axes, on_face: true)
+        _mn1, mx1 = bounds_mm(c1)
+        axes2 = lt.drawing_axes(Geom::Vector3d.new(1, 0, 0))
+        o2, w2, h2 = lt.rect_from(pt(70_000, 0, 0), pt(70_000, 2000, 1000), axes2)
+        c2 = lt.create_rect('tray', { 'name' => 'M1 Bandeja Parede', 'code' => 'M1T' }, o2, w2, h2, axes2, on_face: true)
+        tray = c2.first
+        mn2, mx2 = bounds_mm(c2)
+        check('M1: na parede, o fundo encosta nela', near(mx1[1], 5000) && near(mn2[0], 70_000) && mx2[0] > 70_040 &&
+              near(mn2[1], 0) && near(mx2[1], 2000) && near(mx2[2], 1000),
+              { 'gradil_fundo_y' => mx1[1], 'bandeja' => [mn2, mx2] })
+      end
+
+      guard('M1: fachada por 2 cantos') do
+        axes = lt.drawing_axes(nil)
+        origin, w, h = lt.rect_from(pt(80_000, 0, 0), pt(83_000, 0, 1200), axes)
+        created = lt.create_rect('facade', { 'cols' => 2, 'rows' => 1 }, origin, w, h, axes)
+        kinds = created.map { |e| e.get_attribute('CS_ACM360_DATA', 'kind') }.tally
+        mn, mx = bounds_mm(created)
+        check('M1: fachada por 2 cantos', kinds['acm_tray'] == 2 && kinds['parametric_frame'] == 1 && near(mn[0], 80_000) && mn[1] > -0.5,
+              { 'tipos' => kinds, 'min' => mn, 'max' => mx })
+      end
+
+      guard('M1: tubo por 2 pontos, já cortado no vizinho') do
+        v, _ = lt.create_tube({ 'name' => 'M1 Tubo V' }, pt(90_000, 0, 0), pt(90_000, 0, 2000), cut: false)
+        h, msg = lt.create_tube({ 'name' => 'M1 Tubo H' }, pt(90_000, 0, 500), pt(90_600, 0, 500))
+        vmn, vmx = bounds_mm(v)
+        hd = tube_data(h)
+        check('M1: tubo por 2 pontos, já cortado no vizinho',
+              near(vmn[0], 89_990) && near(vmx[0], 90_010) && near(vmn[1], -20) && near(vmx[2], 2000) &&
+              near(hd['length_mm'], 590, 0.2) && msg.to_s.include?('1 aparada'),
+              { 'vertical' => [vmn, vmx], 'horizontal' => hd['length_mm'], 'msg' => msg })
+      end
+
+      guard('M1: esticar pelas alças') do
+        r1 = lt.resize(frame, 'dir', 3500)
+        mn, mx = bounds_mm(frame)
+        r2 = lt.resize(frame, 'esq', 4000)
+        mn2, mx2 = bounds_mm(frame)
+        r3 = lt.resize(tray, 'sup', 1500)
+        _tmn, tmx = bounds_mm(tray)
+        small = lt.resize(frame, 'sup', 50)
+        check('M1: esticar pelas alças', near(mx[0], 53_500) && near(mn[0], 50_000) && near(mn2[0], 49_500) && near(mx2[0], 53_500) &&
+              near(tmx[2], 1500) && small.include?('mínima'),
+              { 'dir' => [mn[0], mx[0], r1], 'esq' => [mn2[0], mx2[0], r2], 'bandeja_sup' => [tmx[2], r3], 'min' => small })
+      end
+
+      guard('M1: fixador no clique') do
+        # ponto perto da lateral esquerda (C1) a 700 mm de altura, coordenadas da estrutura
+        a = lt.add_fastener(frame, 'ancoragem', [5, 20, 700])
+        c = lt.add_fastener(tray, 'cantoneira', [300, 30, 2])
+        n_frame = fastener_instances(frame).size
+        lt.resize(frame, 'sup', 1800) # regerar mantém o fixador do clique
+        kept = fastener_instances(frame).size
+        check('M1: fixador no clique', a && a[:ref].start_with?('C1') && near(a[:pos_mm], 700, 0.1) && c && c[:ref] == 'inf' &&
+              near(c[:pos_mm], 300, 0.1) && n_frame == 1 && kept == 1 && fastener_instances(tray).size == 1,
+              { 'ancoragem' => a, 'cantoneira' => c, 'antes' => n_frame, 'depois' => kept })
+      end
+
+      guard('M1: ferramenta com cliques na tela') do
+        view = model.active_view
+        view.camera = Sketchup::Camera.new(pt(101_500, -20_000, 8000), pt(101_500, 0, 700), Z_AXIS)
+        tool = P::LiveTool::RectTool.new('frame', { 'name' => 'M1 Cliques' })
+        model.select_tool(tool)
+        sc = ->(p) { s = view.screen_coords(p); [s.x.round, s.y.round] }
+        before = model.entities.to_a
+        x1, y1 = sc.call(pt(100_000, 0, 0))
+        tool.onMouseMove(0, x1, y1, view)
+        tool.onLButtonDown(0, x1, y1, view)
+        x2, y2 = sc.call(pt(103_000, 0, 1500))
+        tool.onMouseMove(0, x2, y2, view)
+        tool.onLButtonDown(0, x2, y2, view)
+        by_click = model.entities.to_a - before
+        cmn, cmx = bounds_mm(by_click)
+        # mesma ferramenta, medida digitada depois do primeiro clique
+        before = model.entities.to_a
+        x3, y3 = sc.call(pt(100_000, 0, 2500))
+        tool.onMouseMove(0, x3, y3, view)
+        tool.onLButtonDown(0, x3, y3, view)
+        x4, y4 = sc.call(pt(101_000, 0, 3000))
+        tool.onMouseMove(0, x4, y4, view)
+        tool.onUserText('2500;1200', view)
+        typed = model.entities.to_a - before
+        params = typed.first && JSON.parse(typed.first.get_attribute('CS_ACM360_DATA', 'params_json'))
+        model.select_tool(nil)
+        check('M1: ferramenta com cliques na tela',
+              by_click.size == 1 && (cmx[0] - cmn[0] - 3000).abs < 60 && (cmx[2] - cmn[2] - 1500).abs < 60 &&
+              params && near(params['width_mm'], 2500, 0.1) && near(params['height_mm'], 1200, 0.1),
+              { 'clique' => [cmn, cmx], 'digitado' => params && params.values_at('width_mm', 'height_mm') })
+      end
     end
 
     # --------------------------------------------------------------------------

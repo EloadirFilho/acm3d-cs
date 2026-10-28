@@ -13,6 +13,7 @@ require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'acm_tray_kernel')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'hardware_fasteners')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'interference_kernel')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'tray_cutouts')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'live_tool')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'report_generator')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'unfold_dxf_engine')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'studio_dialog')
@@ -25,6 +26,15 @@ module CS_ACM360_BETA
     ext_menu.add_item('Abrir Construtor ao Vivo (Painel Completo)…') do
       StudioDialog.show('frame')
     end
+    # Construtor ao Vivo (M1): desenhar e editar direto na tela
+    sub_live = ext_menu.add_submenu('Desenhar na Tela')
+    sub_live.add_item('Gradil por 2 Cantos') { LiveTool.start('frame') }
+    sub_live.add_item('Bandeja ACM por 2 Cantos') { LiveTool.start('tray') }
+    sub_live.add_item('Fachada (Bandejas + Estrutura) por 2 Cantos') { LiveTool.start('facade') }
+    sub_live.add_item('Tubo Avulso por 2 Pontos') { LiveTool.start('tube') }
+    sub_live.add_separator
+    sub_live.add_item('Esticar Estrutura/Bandeja (Alças)') { LiveTool.start('stretch') }
+    sub_live.add_item('Fixador no Clique (Tab troca o tipo)') { LiveTool.start('fastener') }
     ext_menu.add_separator
 
     # Submenu Estruturas
@@ -104,6 +114,17 @@ module CS_ACM360_BETA
     cmd_studio.status_bar_text = 'Abre o Construtor ao Vivo CS ACM360'
     toolbar.add_item(cmd_studio)
 
+    [['Desenhar Gradil', 'frame', 'Gradil por 2 cantos (clique numa parede para encostar nela)'],
+     ['Desenhar Bandeja', 'tray', 'Bandeja ACM por 2 cantos'],
+     ['Tubo 2 Pontos', 'tube', 'Tubo avulso por 2 pontos, em sequência; já corta nas interferências'],
+     ['Esticar', 'stretch', 'Alças nas bordas da estrutura ou bandeja para esticar'],
+     ['Fixador no Clique', 'fastener', 'Cantoneira, ancoragem ou espera no ponto clicado (Tab troca o tipo)']].each do |label, tool, tip|
+      cmd = UI::Command.new(label) { LiveTool.start(tool) }
+      cmd.tooltip = tip
+      cmd.status_bar_text = tip
+      toolbar.add_item(cmd)
+    end
+
     cmd_tray = UI::Command.new('Bandeja ACM') { StudioDialog.show('tray') }
     cmd_tray.tooltip = 'Bandeja ACM (Desenhar, Dobras, Abas e Malha)'
     cmd_tray.status_bar_text = 'Criar ou editar Bandejas de ACM'
@@ -146,6 +167,9 @@ module CS_ACM360_BETA
       next unless kind
 
       sub = context_menu.add_submenu('CS ACM360 BETA')
+      if %w[parametric_frame acm_tray].include?(kind)
+        sub.add_item('Esticar com Alças') { LiveTool.start('stretch') }
+      end
       if kind == 'parametric_frame'
         sub.add_item('Editar Estrutura no Painel…') { StudioDialog.show('frame') }
         sub.add_item('Ver Relatório e Emendas de Barra…') { StudioDialog.show('report') }

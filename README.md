@@ -12,7 +12,7 @@ Sistema híbrido de engenharia para **Fachadas em ACM e Estruturas Metálicas**,
 acm3d-cs/
 ├── CS_ACM360_v1.0.0.rbz                # Plugin ORIGINAL sem correções (base dos patches — não alterar)
 ├── CS_ACM360_v1.0.2.rbz                # ORIGINAL corrigido para produção (tools/patch_original.py) — instale este
-├── CS_ACM360_BETA_v1.4.0-beta.rbz      # Plugin BETA (em desenvolvimento; instala ao lado do original)
+├── CS_ACM360_BETA_v1.5.0-beta.rbz      # Plugin BETA (em desenvolvimento; instala ao lado do original)
 ├── tools/build_rbz.py                  # Gera o .rbz BETA a partir de sketchup-plugin/
 ├── PLANO_PROJETO.md                    # Plano técnico, arquitetura, fórmulas e roadmap Fase 1
 ├── docs/
@@ -36,6 +36,7 @@ acm3d-cs/
         │   ├── hardware_fasteners.rb   # M3/M4: Fita 3M VHB, reforços; cantoneiras, ancoragens e esperas desenhadas pelo plugin
         │   ├── interference_kernel.rb  # M5: corte nas interferências (apara/estende pontas de tubos avulsos)
         │   ├── tray_cutouts.rb         # M6: recortes nas bandejas (automático e por contorno)
+        │   ├── live_tool.rb            # M1: ferramentas na tela (desenhar por 2 cantos, tubo por 2 pontos, alças, fixador no clique)
         │   ├── report_generator.rb     # M8: contagem de fixadores e gravação dos arquivos do relatório
         │   └── studio_dialog.rb        # Ponte Ruby <-> UI::HtmlDialog
         └── ui/
@@ -67,7 +68,7 @@ acm3d-cs/
 
 | | Original (produção) | BETA (desenvolvimento) |
 | :--- | :--- | :--- |
-| Pacote | `CS_ACM360_v1.0.2.rbz` (correções sobre a 1.0.0) | `CS_ACM360_BETA_v1.4.0-beta.rbz` |
+| Pacote | `CS_ACM360_v1.0.2.rbz` (correções sobre a 1.0.0) | `CS_ACM360_BETA_v1.5.0-beta.rbz` |
 | Menu / barra | `CS ACM360` | `CS ACM360 BETA` |
 | Código Ruby | módulo `CS_ACM360` (histórico do git, commit `6081a4d`) | módulo `CS_ACM360_BETA` em `sketchup-plugin/` |
 
@@ -126,12 +127,13 @@ Na barra superior do sistema, clique na aba **`ACM360 Studio`** para acessar:
 | :--- | :--- |
 | Fase 1 — MVP (gradil, tubos, bandejas, Ler ACM, planificação, DXF, OS no ERP) | ✅ Concluído |
 | M3 — Colagem (fita 3M VHB e reforços) | 🟡 Parcial (cálculo de metros/rolos; desenho da fita e tiras pendentes) |
-| M4 — Fixadores avançados | ✅ BETA 1.3.0 (cantoneira, ancoragem e espera desenhadas pelo plugin, por distância, com consumo no relatório; falta a colocação por clique, que depende do M1) |
+| M1 — Construtor ao Vivo | ✅ BETA 1.5.0 (gradil/bandeja/fachada por 2 cantos ou medida, tubo por 2 pontos, alças para esticar, fixador no clique; menu radial e painel lateral adiados) |
+| M4 — Fixadores avançados | ✅ BETA 1.3.0 (cantoneira, ancoragem e espera desenhadas pelo plugin, por distância, com consumo no relatório; colocação por clique no BETA 1.5.0) |
 | M5 — Corte nas interferências | ✅ BETA 1.4.0 (tubos avulsos; corte composto adiado) |
 | M6 — Recortes nas bandejas ACM | ✅ BETA 1.4.0 (automático e por contorno; retângulo/círculo digitado não foi pedido) |
 | M8 — Relatório, lista de corte e exportação | ✅ Concluído no BETA (filtros por seleção e colunas configuráveis adiados) |
 | M12 — Configurações | ✅ Concluído no BETA (idiomas e verificação de atualização adiados) |
-| M1, M2, M7, M9, M10, M11 | ⬜ Planejado |
+| M2, M7, M9, M10, M11 | ⬜ Planejado |
 
 Detalhes e critérios de aceite em [docs/PLANO_MODULOS.md](docs/PLANO_MODULOS.md).
 
