@@ -352,6 +352,9 @@ flowchart TD
 - **Alças para esticar**: alças vermelhas nas 4 bordas de estrutura/bandeja; arrastar ou digitar a nova medida. Esquerda/baixo mantêm a borda oposta parada (recortes da bandeja e posições de tubos personalizados acompanham). Mínimo 100 mm.
 - **Fixador no clique**: cantoneira no retorno da bandeja, ancoragem/espera no tubo da estrutura; Tab troca o tipo. Fica guardado como fixador manual (`fasteners_manual`), sobrevive a regerar a peça e entra no relatório.
 - Menu *Desenhar na Tela*, botões na barra, item *Esticar com Alças* no clique direito.
+- **BETA 1.6.0**: no gradil, ↑/↓ mudam as travessas horizontais e →/← as verticais antes do 2º clique (prévia tracejada; VCB `larg;alt;vert;horiz`).
+- **Menu radial** (`lib/radial_menu.rb`): abre no cursor pelo atalho que o usuário atribuir a *Menu Radial* em Janela > Preferências > Atalhos (o SketchUp não deixa a extensão definir o atalho). Anel de dentro: gradil, bandeja, fachada, tubo, esticar, cantoneira, ancoragem, espera; anel de fora: painel lateral, Ler ACM, cortar, recortes, planificar, DXF, relatório, painel completo.
+- **Painel lateral** (`lib/side_panel.rb`, `ui/side_panel.html`): janela estreita encostada à direita com as ferramentas, os parâmetros da próxima peça (perfil, travessas, chapa, retorno; lembrados entre sessões e usados também pelo menu radial e pela barra) e a peça selecionada, com largura/altura/travessas/nome editáveis e as ações dela. Atualiza ao mudar a seleção. Parâmetros da peça *sob o mouse* ficaram para depois.
 - Testes no SketchUp: eixos na parede, gradil/bandeja/fachada por 2 cantos, fundo encostado na parede, tubo cortado no vizinho, esticar pelas 2 bordas, fixador no clique mantido ao regerar e a ferramenta com cliques simulados na tela e medida digitada.
 
 ---

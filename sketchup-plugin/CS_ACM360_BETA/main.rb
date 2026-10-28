@@ -14,6 +14,8 @@ require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'hardware_fasteners')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'interference_kernel')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'tray_cutouts')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'live_tool')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'radial_menu')
+require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'side_panel')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'report_generator')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'unfold_dxf_engine')
 require File.join(CS_ACM360_BETA::PLUGIN_DIR, 'lib', 'studio_dialog')
@@ -23,6 +25,9 @@ module CS_ACM360_BETA
     # 1. Menu Principal em Extensões > CS ACM360 (Estruturas & ACM)
     ext_menu = UI.menu('Plugins').add_submenu('CS ACM360 BETA · Estruturas & ACM')
 
+    # Atalhos: Janela > Preferências > Atalhos, procurar "Menu Radial" ou "Painel Lateral"
+    ext_menu.add_item('Menu Radial') { RadialMenu.open }
+    ext_menu.add_item('Painel Lateral') { SidePanel.toggle }
     ext_menu.add_item('Abrir Construtor ao Vivo (Painel Completo)…') do
       StudioDialog.show('frame')
     end
@@ -35,6 +40,9 @@ module CS_ACM360_BETA
     sub_live.add_separator
     sub_live.add_item('Esticar Estrutura/Bandeja (Alças)') { LiveTool.start('stretch') }
     sub_live.add_item('Fixador no Clique (Tab troca o tipo)') { LiveTool.start('fastener') }
+    sub_live.add_item('Cantoneira no Clique') { LiveTool.start('fastener', 'type' => 'cantoneira') }
+    sub_live.add_item('Ancoragem no Clique') { LiveTool.start('fastener', 'type' => 'ancoragem') }
+    sub_live.add_item('Espera no Clique') { LiveTool.start('fastener', 'type' => 'espera') }
     ext_menu.add_separator
 
     # Submenu Estruturas
@@ -114,6 +122,16 @@ module CS_ACM360_BETA
     cmd_studio.status_bar_text = 'Abre o Construtor ao Vivo CS ACM360'
     toolbar.add_item(cmd_studio)
 
+    cmd_radial = UI::Command.new('Menu Radial') { RadialMenu.open }
+    cmd_radial.tooltip = 'Menu radial no cursor (atribua um atalho em Preferências > Atalhos)'
+    cmd_radial.status_bar_text = cmd_radial.tooltip
+    toolbar.add_item(cmd_radial)
+
+    cmd_side = UI::Command.new('Painel Lateral') { SidePanel.toggle }
+    cmd_side.tooltip = 'Painel lateral: ferramentas, próxima peça e peça selecionada'
+    cmd_side.status_bar_text = cmd_side.tooltip
+    toolbar.add_item(cmd_side)
+
     [['Desenhar Gradil', 'frame', 'Gradil por 2 cantos (clique numa parede para encostar nela)'],
      ['Desenhar Bandeja', 'tray', 'Bandeja ACM por 2 cantos'],
      ['Tubo 2 Pontos', 'tube', 'Tubo avulso por 2 pontos, em sequência; já corta nas interferências'],
@@ -156,6 +174,8 @@ module CS_ACM360_BETA
     toolbar.add_item(cmd_erp)
 
     toolbar.restore
+
+    Sketchup.add_observer(SidePanel::ModelWatcher.new) # painel lateral segue o modelo aberto
 
     # 3. Menu de Contexto (Botão Direito na Viewport)
     UI.add_context_menu_handler do |context_menu|

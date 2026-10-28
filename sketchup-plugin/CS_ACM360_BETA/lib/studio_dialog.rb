@@ -88,6 +88,8 @@ module CS_ACM360_BETA
         UnfoldDxfEngine.export_erp_json_dialog
       end
 
+      dlg.add_action_callback('side_panel') { |_ctx| SidePanel.toggle }
+
       # --- M1: ferramentas na tela, com os campos do painel ---
       dlg.add_action_callback('start_tool') do |_ctx, json_str|
         data = JSON.parse(json_str.to_s) rescue {}
@@ -210,6 +212,7 @@ module CS_ACM360_BETA
     end
 
     def self.push_state_to_ui(tab = nil)
+      SidePanel.refresh if defined?(SidePanel)
       return unless @dialog && @dialog.visible?
       payload = UnfoldDxfEngine.build_erp_payload
       payload['profiles'] = Settings.profiles

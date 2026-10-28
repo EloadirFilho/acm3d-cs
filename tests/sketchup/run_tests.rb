@@ -254,6 +254,7 @@ module CSBetaTests
       run_interference(model)
       run_cutouts(model)
       run_live(model)
+      run_panels(model)
     end
 
     # --------------------------------------------------------------------------
@@ -271,6 +272,79 @@ module CSBetaTests
 
     def near(a, b, tol = 0.5)
       (a - b).abs <= tol
+    end
+
+    # Menu radial e painel lateral (x >= 120 m)
+    def run_panels(model)
+      rm = P::RadialMenu
+      saved = Sketchup.read_default('CS_ACM360_BETA', 'live_params')
+      guard('M1: menu radial acha a opção sob o mouse') do
+        hits = [rm.hit(500, 400, 500, 400), rm.hit(500, 400, 500, 310), rm.hit(500, 400, 680, 400),
+                rm.hit(500, 400, 500 + 90, 400 + 90), rm.hit(500, 400, 900, 400)]
+        check('M1: menu radial acha a opção sob o mouse',
+              hits == [:center, [:inner, 0], [:outer, 2], [:inner, 3], nil] &&
+              rm.item([:inner, 0])[0] == 'Gradil' && rm.item([:outer, 0])[0] == 'Painel',
+              hits)
+      end
+
+      guard('M1: clique no menu radial abre a ferramenta') do
+        view = model.active_view
+        tool = rm::Tool.new
+        model.select_tool(tool)
+        cx, cy = view.vpwidth / 2, view.vpheight / 2
+        tool.onMouseMove(0, cx, cy, view)
+        tool.draw(view)
+        tool.onMouseMove(0, cx + 90, cy, view) # anel de dentro, à direita: Fachada
+        tool.onLButtonDown(0, cx + 90, cy, view)
+        active = model.tools.active_tool
+        mode = active.instance_variable_get(:@mode)
+        model.select_tool(nil)
+        check('M1: clique no menu radial abre a ferramenta', active.is_a?(P::LiveTool::RectTool) && mode == 'facade',
+              { 'ferramenta' => active.class.name, 'modo' => mode })
+      end
+
+      guard('M1: mouse paralelo ao plano não manda o ponto ao infinito') do
+        o = pt(0, 0, 0)
+        par = P::LiveTool.ray_on_plane([pt(0, -1000, 500), Geom::Vector3d.new(1, 0.001, 0)], o, Y_AXIS)
+        far = P::LiveTool.ray_on_plane([pt(0, -1000, 500), Geom::Vector3d.new(1, 0.03, 0)], o, Y_AXIS)
+        ok = P::LiveTool.ray_on_plane([pt(500, -1000, 500), Geom::Vector3d.new(0, 1, 0)], o, Y_AXIS)
+        check('M1: mouse paralelo ao plano não manda o ponto ao infinito',
+              par.nil? && far.nil? == (1000 / 0.03 > 200_000) && ok && near(ok.x.to_mm, 500),
+              { 'paralelo' => par && par.to_a, 'longe' => far && far.to_a, 'normal' => ok && ok.to_a })
+      end
+
+      guard('M1: ferramenta lembra os últimos parâmetros') do
+        P::LiveTool.start('frame', 'trav_v_count' => 5, 'trav_h_count' => 0, 'width_mm' => 999, 'name' => 'M1 Lembrar')
+        t = P::LiveTool.start('frame')
+        prm = t.instance_variable_get(:@params)
+        model.select_tool(nil)
+        check('M1: ferramenta lembra os últimos parâmetros',
+              prm['trav_v_count'] == 5 && prm['trav_h_count'] == 0 && !prm.key?('width_mm'), prm)
+      end
+
+      guard('M1: painel lateral mostra e edita a seleção') do
+        axes = P::LiveTool.drawing_axes(nil)
+        origin, w, h = P::LiveTool.rect_from(pt(120_000, 0, 0), pt(122_000, 0, 1000), axes)
+        frame = P::LiveTool.create_rect('frame', { 'name' => 'M1 Painel' }, origin, w, h, axes).first
+        model.selection.clear
+        model.selection.add(frame)
+        st = P::SidePanel.state
+        msg = P::SidePanel.apply_selected('width_mm' => 2500, 'height_mm' => 1000, 'trav_v_count' => 3, 'trav_h_count' => 2, 'name' => 'M1 Painel')
+        after = P::SidePanel.describe(frame)
+        mn, mx = bounds_mm(frame)
+        P::SidePanel.show
+        shown = P::SidePanel.visible?
+        P::SidePanel.refresh
+        P::SidePanel.toggle
+        check('M1: painel lateral mostra e edita a seleção',
+              st['selection'] && st['selection']['kind'] == 'parametric_frame' && near(st['selection']['width_mm'], 2000) &&
+              near(after['width_mm'], 2500) && after['trav_v_count'] == 3 && after['trav_h_count'] == 2 &&
+              near(mn[0], 120_000) && near(mx[0], 122_500) && shown && !P::SidePanel.visible? && st['profiles'].size > 3,
+              { 'antes' => st['selection'], 'depois' => after, 'msg' => msg, 'x' => [mn[0], mx[0]], 'aberto' => shown, 'fechado' => !P::SidePanel.visible?, 'perfis' => st['profiles'].size })
+      end
+    ensure
+      Sketchup.write_default('CS_ACM360_BETA', 'live_params', saved || '{}')
+      P::LiveTool.instance_variable_set(:@last, nil)
     end
 
     def run_live(model)
@@ -371,7 +445,8 @@ module CSBetaTests
         tool.onLButtonDown(0, x2, y2, view)
         by_click = model.entities.to_a - before
         cmn, cmx = bounds_mm(by_click)
-        # mesma ferramenta, medida digitada depois do primeiro clique
+        # mesma ferramenta, setas mudam as travessas, medida digitada depois do primeiro clique
+        [VK_UP, VK_UP, VK_LEFT].each { |k| tool.onKeyDown(k, 0, 0, view) }
         before = model.entities.to_a
         x3, y3 = sc.call(pt(100_000, 0, 2500))
         tool.onMouseMove(0, x3, y3, view)
@@ -381,11 +456,26 @@ module CSBetaTests
         tool.onUserText('2500;1200', view)
         typed = model.entities.to_a - before
         params = typed.first && JSON.parse(typed.first.get_attribute('CS_ACM360_DATA', 'params_json'))
+        click_params = by_click.first && JSON.parse(by_click.first.get_attribute('CS_ACM360_DATA', 'params_json'))
+        # largura;altura;verticais;horizontais no VCB
+        before = model.entities.to_a
+        x5, y5 = sc.call(pt(100_000, 0, 4500))
+        tool.onMouseMove(0, x5, y5, view)
+        tool.onLButtonDown(0, x5, y5, view)
+        tool.onMouseMove(0, x4, y4 - 200, view)
+        tool.onUserText('2000;1000;4;0', view)
+        vcb = model.entities.to_a - before
+        vcb_params = vcb.first && JSON.parse(vcb.first.get_attribute('CS_ACM360_DATA', 'params_json'))
         model.select_tool(nil)
         check('M1: ferramenta com cliques na tela',
               by_click.size == 1 && (cmx[0] - cmn[0] - 3000).abs < 60 && (cmx[2] - cmn[2] - 1500).abs < 60 &&
-              params && near(params['width_mm'], 2500, 0.1) && near(params['height_mm'], 1200, 0.1),
-              { 'clique' => [cmn, cmx], 'digitado' => params && params.values_at('width_mm', 'height_mm') })
+              params && near(params['width_mm'], 2500, 0.1) && near(params['height_mm'], 1200, 0.1) &&
+              click_params.values_at('trav_v_count', 'trav_h_count') == [2, 1] &&
+              params.values_at('trav_v_count', 'trav_h_count') == [1, 3] &&
+              vcb_params && vcb_params.values_at('trav_v_count', 'trav_h_count') == [4, 0],
+              { 'clique' => [cmn, cmx], 'digitado' => params && params.values_at('width_mm', 'height_mm', 'trav_v_count', 'trav_h_count'),
+                'clique_trav' => click_params && click_params.values_at('trav_v_count', 'trav_h_count'),
+                'vcb_trav' => vcb_params && vcb_params.values_at('trav_v_count', 'trav_h_count') })
       end
     end
 

@@ -4,6 +4,7 @@
 # Ferramentas na tela do SketchUp:
 #   RectTool      — gradil, bandeja ou fachada por 2 cantos (ou medida digitada);
 #                   clicando numa face, a peça é desenhada encostada nela.
+#                   No gradil, as setas mudam a quantidade de travessas.
 #   TubeTool      — tubo avulso por 2 pontos, em sequência; corta nas interferências (M5).
 #   StretchTool   — alças nas bordas de estrutura/bandeja para esticar.
 #   FastenerTool  — cantoneira/ancoragem/espera no ponto clicado (Tab troca o tipo).
@@ -21,16 +22,51 @@ module CS_ACM360_BETA
     PREVIEW = Sketchup::Color.new(37, 99, 235)
     HANDLE  = Sketchup::Color.new(220, 38, 38)
 
+    REMEMBERED = %w[frame tray facade tube].freeze
+    # Só o que define a peça; medidas e posições vêm do desenho
+    TRANSIENT = %w[update_selected width_mm height_mm length_mm total_w_mm total_h_mm
+                   origin_x_mm origin_y_mm origin_z_mm custom_v_xs_mm custom_h_zs_mm seam_overrides cutouts].freeze
+
+    # Sem params, usa os últimos do mesmo tipo (painel lateral, painel completo ou desenho anterior)
     def start(tool, params = {})
       model = Sketchup.active_model
-      t = case tool.to_s
-          when 'frame', 'tray', 'facade' then RectTool.new(tool.to_s, params)
+      tool = tool.to_s
+      params = params.is_a?(Hash) ? params : {}
+      if REMEMBERED.include?(tool)
+        remember(tool, params) unless params.empty?
+        params = params_for(tool)
+      end
+      t = case tool
+          when 'frame', 'tray', 'facade' then RectTool.new(tool, params)
           when 'tube'     then TubeTool.new(params)
           when 'stretch'  then StretchTool.new
           when 'fastener' then FastenerTool.new(params['type'] || 'cantoneira')
           end
       model.select_tool(t) if t
       t
+    end
+
+    def all_params
+      @last ||= begin
+        JSON.parse(Sketchup.read_default('CS_ACM360_BETA', 'live_params', '{}').to_s)
+      rescue StandardError
+        {}
+      end
+      @last = {} unless @last.is_a?(Hash)
+      @last
+    end
+
+    def params_for(mode)
+      (all_params[mode.to_s] || {}).dup
+    end
+
+    def remember(mode, params)
+      return unless REMEMBERED.include?(mode.to_s) && params.is_a?(Hash)
+      old = params_for(mode)
+      # chapa trocada sem espessura/fator: valem os da chapa nova
+      old = old.reject { |k, _| %w[thickness_mm bend_factor_mm].include?(k) } if params.key?('acm_preset') && !params.key?('thickness_mm')
+      all_params[mode.to_s] = old.merge(params.reject { |k, _| TRANSIENT.include?(k) })
+      Sketchup.write_default('CS_ACM360_BETA', 'live_params', JSON.generate(all_params))
     end
 
     # --------------------------------------------------------------------------
@@ -241,6 +277,16 @@ module CS_ACM360_BETA
       found
     end
 
+    MAX_REACH_MM = 200_000.0
+
+    # Ponto do mouse no plano; nil com o raio quase paralelo ao plano ou longe demais
+    # (olhando a parede de lado o ponto iria ao infinito e travava a prévia)
+    def ray_on_plane(ray, origin, normal)
+      return nil if ray[1].clone.normalize.dot(normal.clone.normalize).abs < 0.02
+      pt = Geom.intersect_line_plane(ray, [origin, normal])
+      pt if pt && pt.distance(origin).to_mm < MAX_REACH_MM
+    end
+
     # Parte de a perpendicular a n (n unitário)
     def reject(a, n)
       d = a.dot(n)
@@ -270,6 +316,22 @@ module CS_ACM360_BETA
         @params = params || {}
       end
 
+      # Travessas do gradil: [verticais, horizontais] (padrões do FrameKernel)
+      def trav
+        [(@params['trav_v_count'] || 2).to_i, (@params['trav_h_count'] || 1).to_i]
+      end
+
+      def set_trav(v, h)
+        @params = @params.merge('trav_v_count' => v.clamp(0, 40), 'trav_h_count' => h.clamp(0, 30))
+        @params.delete('custom_v_xs_mm') # quantidade nova redistribui por igual
+        @params.delete('custom_h_zs_mm')
+      end
+
+      def trav_text
+        v, h = trav
+        "#{v} vertical(is) × #{h} horizontal(is)"
+      end
+
       def activate
         @ip = Sketchup::InputPoint.new
         reset
@@ -279,9 +341,14 @@ module CS_ACM360_BETA
         @state = 0
         @p1 = @p2 = @axes = nil
         @on_face = false
-        Sketchup.vcb_label = @mode == 'facade' ? 'Larg;Alt;Col;Lin (mm)' : 'Largura;Altura (mm)'
-        Sketchup.status_text = "#{NAMES[@mode]}: clique no primeiro canto (numa face, desenha encostado nela)."
+        Sketchup.vcb_label = { 'facade' => 'Larg;Alt;Col;Lin (mm)', 'frame' => 'Larg;Alt;Vert;Horiz' }[@mode] || 'Largura;Altura (mm)'
+        status("clique no primeiro canto (numa face, desenha encostado nela).")
         Sketchup.active_model.active_view.invalidate
+      end
+
+      def status(msg)
+        msg += " Setas: travessas (#{trav_text})." if @mode == 'frame'
+        Sketchup.status_text = "#{NAMES[@mode]}: #{msg}"
       end
 
       def deactivate(view)
@@ -290,6 +357,23 @@ module CS_ACM360_BETA
 
       def onCancel(_reason, _view)
         reset
+      end
+
+      # ↑/↓ travessas horizontais, →/← verticais
+      def onKeyDown(key, _repeat, _flags, view)
+        return false unless @mode == 'frame'
+        v, h = trav
+        case key
+        when VK_UP    then h += 1
+        when VK_DOWN  then h -= 1
+        when VK_RIGHT then v += 1
+        when VK_LEFT  then v -= 1
+        else return false
+        end
+        set_trav(v, h)
+        status(@state.zero? ? 'clique no primeiro canto.' : 'clique no canto oposto ou digite a medida.')
+        view.invalidate
+        true
       end
 
       def enableVCB?
@@ -322,7 +406,7 @@ module CS_ACM360_BETA
           @on_face = !normal.nil?
           @axes = LiveTool.drawing_axes(normal)
           @state = 1
-          Sketchup.status_text = "#{NAMES[@mode]}: clique no canto oposto ou digite a medida."
+          status('clique no canto oposto ou digite a medida.')
         else
           p2 = plane_point(view, x, y)
           finish(p2) if p2
@@ -338,6 +422,7 @@ module CS_ACM360_BETA
         su = @p2 ? ((@p2 - @p1).dot(u) < 0 ? -1 : 1) : 1
         sv = @p2 ? ((@p2 - @p1).dot(v) < 0 ? -1 : 1) : 1
         @params = @params.merge('cols' => dims[2].to_i, 'rows' => dims[3].to_i) if @mode == 'facade' && dims.size >= 4
+        set_trav(dims[2].to_i, (dims[3] || trav[1]).to_i) if @mode == 'frame' && dims.size >= 3
         finish(@p1.offset(u, su * dims[0].mm).offset(v, sv * dims[1].mm))
         view.invalidate
       end
@@ -350,13 +435,13 @@ module CS_ACM360_BETA
           return
         end
         LiveTool.create_rect(@mode, @params, origin, w, h, @axes, on_face: @on_face)
+        LiveTool.remember(@mode, @params) # travessas mudadas nas setas valem para o próximo
         StudioDialog.push_state_to_ui if defined?(StudioDialog)
         reset
       end
 
       def plane_point(view, x, y)
-        ray = view.pickray(x, y)
-        Geom.intersect_line_plane(ray, [@p1, @axes[1]])
+        LiveTool.ray_on_plane(view.pickray(x, y), @p1, @axes[1])
       end
 
       def corners
@@ -377,9 +462,26 @@ module CS_ACM360_BETA
         view.drawing_color = PREVIEW
         view.line_width = 2
         view.draw(GL_LINE_LOOP, pts)
+        draw_trav(view, pts) if @mode == 'frame'
         _o, w, h = LiveTool.rect_from(@p1, @p2, @axes)
         mid = Geom.linear_combination(0.5, pts[0], 0.5, pts[2])
-        view.draw_text(view.screen_coords(mid), "#{LiveTool.fmt(w)} × #{LiveTool.fmt(h)} mm", size: 14, color: PREVIEW)
+        label = "#{LiveTool.fmt(w)} × #{LiveTool.fmt(h)} mm"
+        label += "
+#{trav_text}" if @mode == 'frame'
+        view.draw_text(view.screen_coords(mid), label, size: 14, color: PREVIEW)
+      end
+
+      # Prévia das travessas distribuídas por igual
+      def draw_trav(view, pts)
+        a, b, c, e = pts
+        nv, nh = trav
+        lines = (1..nv).flat_map { |i| t = i / (nv + 1.0); [Geom.linear_combination(1 - t, a, t, b), Geom.linear_combination(1 - t, e, t, c)] }
+        lines += (1..nh).flat_map { |j| t = j / (nh + 1.0); [Geom.linear_combination(1 - t, a, t, e), Geom.linear_combination(1 - t, b, t, c)] }
+        return if lines.empty?
+        view.line_width = 1
+        view.line_stipple = '-'
+        view.draw(GL_LINES, lines)
+        view.line_stipple = ''
       end
 
       def getExtents
@@ -555,8 +657,7 @@ module CS_ACM360_BETA
         grp, tr = @target
         horiz = %w[esq dir].include?(@drag[:side])
         axis = (horiz ? tr.xaxis : tr.zaxis).normalize
-        ray = view.pickray(x, y)
-        pt = Geom.intersect_line_plane(ray, [@drag[:start], tr.yaxis])
+        pt = LiveTool.ray_on_plane(view.pickray(x, y), @drag[:start], tr.yaxis)
         return nil unless pt && grp.valid?
         delta = (pt - @drag[:start]).dot(axis).to_mm
         delta = -delta if %w[esq inf].include?(@drag[:side])

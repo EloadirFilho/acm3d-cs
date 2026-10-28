@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>CS ACM360 BETA</title>
+  <style>
+    :root {
+      --brand-color: #2563EB;
+      --bg: #0F172A;
+      --surface: #1E293B;
+      --surface-alt: #334155;
+      --border: #475569;
+      --text: #F8FAFC;
+      --muted: #94A3B8;
+      --danger: #EF4444;
+      --success: #10B981;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      accent-color: var(--brand-color);
+      font-size: 12px;
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 2;
+    }
+    header b { font-size: 13px; }
+    header .ver { color: var(--muted); font-size: 11px; margin-left: 4px; }
+    section { padding: 8px 10px; border-bottom: 1px solid var(--surface-alt); }
+    h2 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+    button {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 5px; padding: 6px 6px; font-size: 12px; cursor: pointer; text-align: left;
+    }
+    button:hover { background: var(--surface-alt); }
+    button.primary { background: var(--brand-color); border-color: var(--brand-color); text-align: center; }
+    button.icon { padding: 3px 7px; text-align: center; }
+    .ico { display: inline-block; width: 16px; text-align: center; margin-right: 3px; opacity: .85; }
+    .tabs { display: flex; gap: 2px; margin-bottom: 6px; }
+    .tabs button { flex: 1; text-align: center; padding: 4px 2px; }
+    .tabs button.on { background: var(--brand-color); border-color: var(--brand-color); }
+    label { display: block; color: var(--muted); font-size: 11px; margin: 5px 0 2px; }
+    input, select {
+      width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+      border-radius: 4px; padding: 4px 5px; font-size: 12px;
+    }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .hint { color: var(--muted); font-size: 11px; margin: 6px 0 0; line-height: 1.35; }
+    .sel-title { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
+    .sel-info { color: var(--muted); font-size: 11px; margin-bottom: 4px; line-height: 1.4; }
+    .actions { margin-top: 6px; }
+    #status {
+      padding: 8px 10px; color: var(--muted); font-size: 11px; white-space: pre-wrap; min-height: 30px;
+    }
+    #status.ok { color: var(--success); }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div><b>CS ACM360</b><span class="ver" id="ver"></span></div>
+    <div>
+      <button class="icon" title="Menu radial na tela" onclick="CSSide.action('radial')">◎</button>
+      <button class="icon" title="Painel completo" onclick="CSSide.action('studio')">☰</button>
+    </div>
+  </header>
+
+  <section>
+    <h2>Desenhar na tela</h2>
+    <div class="grid">
+      <button onclick="CSSide.draw('frame')" title="2 cliques nos cantos; setas mudam as travessas"><span class="ico">▦</span>Gradil</button>
+      <button onclick="CSSide.draw('tray')" title="2 cliques nos cantos"><span class="ico">▭</span>Bandeja</button>
+      <button onclick="CSSide.draw('facade')" title="Bandejas + estrutura por 2 cantos"><span class="ico">▤</span>Fachada</button>
+      <button onclick="CSSide.draw('tube')" title="Tubo por 2 pontos, em sequência"><span class="ico">╱</span>Tubo</button>
+      <button onclick="CSSide.tool('stretch')" title="Alças nas bordas para esticar"><span class="ico">↔</span>Esticar</button>
+      <button onclick="CSSide.tool('fastener', {type: 'cantoneira'})" title="Cantoneira no retorno da bandeja"><span class="ico">⌐</span>Cantoneira</button>
+      <button onclick="CSSide.tool('fastener', {type: 'ancoragem'})" title="Ancoragem no tubo da estrutura"><span class="ico">⚓</span>Ancoragem</button>
+      <button onclick="CSSide.tool('fastener', {type: 'espera'})" title="Espera / afastador no tubo"><span class="ico">⊥</span>Espera</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Próxima peça</h2>
+    <div class="tabs">
+      <button data-tab="frame" onclick="CSSide.tab('frame')">Gradil</button>
+      <button data-tab="tray" onclick="CSSide.tab('tray')">Bandeja</button>
+      <button data-tab="facade" onclick="CSSide.tab('facade')">Fachada</button>
+      <button data-tab="tube" onclick="CSSide.tab('tube')">Tubo</button>
+    </div>
+
+    <div data-pane="frame">
+      <label>Perfil do quadro</label>
+      <select data-key="profile_corda" class="profiles" data-def="5"></select>
+      <div class="row">
+        <div><label>Lado para frente</label>
+          <select data-key="rot_corda" data-def="1"><option value="1">Menor</option><option value="2">Maior</option></select></div>
+        <div><label>Canto</label>
+          <select data-key="corner_type" data-def="encosto">
+            <option value="encosto">Por dentro</option><option value="passante_h">Por fora</option><option value="esquadria">45°</option>
+          </select></div>
+      </div>
+      <label>Perfil das travessas</label>
+      <select data-key="profile_travessa" class="profiles" data-def="3"></select>
+      <div class="row">
+        <div><label>Travessas verticais</label><input type="number" min="0" max="40" data-key="trav_v_count" data-def="2"></div>
+        <div><label>Travessas horizontais</label><input type="number" min="0" max="30" data-key="trav_h_count" data-def="1"></div>
+      </div>
+      <div class="row">
+        <div><label>Travessas</label>
+          <select data-key="trav_align" data-def="frente">
+            <option value="frente">Na frente</option><option value="centro">No centro</option><option value="atras">Atrás</option>
+          </select></div>
+        <div><label>Material</label>
+          <select data-key="material" data-def="aco_carbono">
+            <option value="aco_carbono">Aço carbono</option><option value="galvanizado">Galvanizado</option><option value="aluminio">Alumínio</option>
+          </select></div>
+      </div>
+      <p class="hint">Desenhando: ↑/↓ travessas horizontais, →/← verticais. Medida: <b>3000;1500</b> ou <b>3000;1500;3;1</b>.</p>
+    </div>
+
+    <div data-pane="tray" class="hidden">
+      <label>Chapa ACM</label>
+      <select data-key="acm_preset" class="presets"></select>
+      <label>Bordas</label>
+      <select data-key="default_edge_type" data-def="dobra">
+        <option value="dobra">Dobra 90°</option><option value="dobra_aba">Dobra + aba</option>
+        <option value="refile">Aba de refile</option><option value="corte">Corte reto</option>
+      </select>
+      <div class="row">
+        <div><label>Retorno (mm)</label><input type="number" min="0" data-key="return_mm" data-defkey="return_mm"></div>
+        <div><label>Aba (mm)</label><input type="number" min="0" data-key="aba_mm" data-defkey="aba_mm"></div>
+      </div>
+      <p class="hint">Clique numa parede para a bandeja encostar nela. Medida: <b>1200;800</b>.</p>
+    </div>
+
+    <div data-pane="facade" class="hidden">
+      <div class="row">
+        <div><label>Junta (mm)</label><input type="number" min="0" data-key="joint_mm" data-defkey="joint_mm"></div>
+        <div><label>Retorno (mm)</label><input type="number" min="0" data-key="return_mm" data-defkey="return_mm"></div>
+      </div>
+      <p class="hint">Colunas e linhas saem da chapa; para escolher, digite <b>3600;1800;3;2</b> (larg;alt;col;lin).</p>
+    </div>
+
+    <div data-pane="tube" class="hidden">
+      <label>Perfil</label>
+      <select data-key="profile_id" class="profiles" data-def="5"></select>
+      <div class="row">
+        <div><label>Lado para frente</label>
+          <select data-key="rot" data-def="1"><option value="1">Menor</option><option value="2">Maior</option></select></div>
+        <div><label>Material</label>
+          <select data-key="material" data-def="aco_carbono">
+            <option value="aco_carbono">Aço carbono</option><option value="galvanizado">Galvanizado</option><option value="aluminio">Alumínio</option>
+          </select></div>
+      </div>
+      <p class="hint">Cada tubo já sai cortado nos vizinhos. Medida: comprimento em mm.</p>
+    </div>
+  </section>
+
+  <section id="selSection">
+    <h2>Seleção</h2>
+    <div id="selEmpty" class="hint">Selecione uma estrutura, bandeja ou tubo do plugin.</div>
+    <div id="selBox" class="hidden">
+      <div class="sel-title" id="selTitle"></div>
+      <div class="sel-info" id="selInfo"></div>
+      <div id="selEdit">
+        <div class="row" id="selCodeRow">
+          <div><label>Código</label><input id="sCode"></div>
+          <div><label>Nome</label><input id="sNameT"></div>
+        </div>
+        <div id="selNameRow"><label>Nome</label><input id="sName"></div>
+        <div class="row">
+          <div><label>Largura (mm)</label><input type="number" id="sW"></div>
+          <div><label>Altura (mm)</label><input type="number" id="sH"></div>
+        </div>
+        <div class="row" id="selTravRow">
+          <div><label>Trav. verticais</label><input type="number" min="0" max="40" id="sTV"></div>
+          <div><label>Trav. horizontais</label><input type="number" min="0" max="30" id="sTH"></div>
+        </div>
+        <div style="margin-top:6px;"><button class="primary" style="width:100%;" onclick="CSSide.apply()">Aplicar</button></div>
+      </div>
+      <div class="grid actions" id="selActions"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ações</h2>
+    <div class="grid">
+      <button onclick="CSSide.action('ler_acm')" title="Estrutura atrás das bandejas selecionadas">Ler ACM</button>
+      <button onclick="CSSide.action('cut_interferences')" title="Tubos avulsos selecionados">Cortar tubos</button>
+      <button onclick="CSSide.action('unfold')">Planificar</button>
+      <button onclick="CSSide.action('dxf')">DXF CNC</button>
+      <button onclick="CSSide.action('report')">Relatório</button>
+      <button onclick="CSSide.action('mark_holes')" title="Objetos que viram furo nas bandejas">Marcar furo</button>
+    </div>
+  </section>
+
+  <div id="status"></div>
+
+  <script>
+    (function() {
+      function call(name, arg) {
+        if (window.sketchup && sketchup[name]) {
+          if (arg === undefined) sketchup[name](); else sketchup[name](arg);
+        }
+      }
+      function $(id) { return document.getElementById(id); }
+      function num(v) { return Math.round(Number(v) * 10) / 10; }
+      function fmt(v) { return String(num(v)).replace('.', ','); }
+
+      var SEL_ACTIONS = {
+        parametric_frame: [['fix_ancoragem', 'Ancoragens'], ['fix_espera', 'Esperas'], ['fix_remove', 'Tirar fixadores'], ['stretch', 'Esticar']],
+        acm_tray: [['fix_cantoneira', 'Cantoneiras'], ['cutouts_auto', 'Recortes auto'], ['cutouts_contour', 'Recorte contorno'],
+                   ['cutouts_clear', 'Limpar recortes'], ['fix_remove', 'Tirar fixadores'], ['stretch', 'Esticar']],
+        single_tube: [['cut_interferences', 'Cortar no vizinho']]
+      };
+
+      var S = window.CSSide = {
+        state: null,
+        current: 'frame',
+
+        load: function(st) {
+          this.state = st;
+          $('ver').textContent = 'BETA ' + st.version;
+          document.querySelectorAll('select.profiles').forEach(function(sel) {
+            sel.innerHTML = '';
+            st.profiles.forEach(function(p) { sel.add(new Option(p.name, p.id)); });
+          });
+          document.querySelectorAll('select.presets').forEach(function(sel) {
+            sel.innerHTML = '';
+            st.presets.forEach(function(p) { sel.add(new Option(p.name, p.id)); });
+          });
+          this.fillParams();
+          this.showSelection(st.selection, st.selected_count);
+        },
+
+        // Campos "próxima peça": valor lembrado > padrão do campo > padrão das configurações
+        fillParams: function() {
+          var st = this.state;
+          document.querySelectorAll('[data-pane]').forEach(function(pane) {
+            var mode = pane.getAttribute('data-pane');
+            var saved = (st.params && st.params[mode]) || {};
+            pane.querySelectorAll('[data-key]').forEach(function(el) {
+              var key = el.getAttribute('data-key');
+              var def = el.hasAttribute('data-defkey') ? st.defaults[el.getAttribute('data-defkey')] :
+                        (key === 'acm_preset' ? st.defaults.acm_preset : el.getAttribute('data-def'));
+              var v = saved[key] !== undefined ? saved[key] : def;
+              if (v !== undefined && v !== null) el.value = v;
+              el.onchange = function() { S.saveParams(mode); };
+            });
+          });
+        },
+
+        collect: function(mode) {
+          var out = {};
+          document.querySelectorAll('[data-pane="' + mode + '"] [data-key]').forEach(function(el) {
+            var key = el.getAttribute('data-key');
+            out[key] = (el.type === 'number' || /^(profile_|rot|trav_._count)/.test(key)) ? Number(el.value) : el.value;
+          });
+          return out;
+        },
+
+        saveParams: function(mode) {
+          call('set_params', JSON.stringify({ mode: mode, params: this.collect(mode) }));
+        },
+
+        tab: function(mode) {
+          this.current = mode;
+          document.querySelectorAll('.tabs button').forEach(function(b) {
+            b.classList.toggle('on', b.getAttribute('data-tab') === mode);
+          });
+          document.querySelectorAll('[data-pane]').forEach(function(p) {
+            p.classList.toggle('hidden', p.getAttribute('data-pane') !== mode);
+          });
+        },
+
+        draw: function(mode) {
+          this.tab(mode);
+          this.tool(mode, this.collect(mode));
+        },
+
+        tool: function(tool, params) {
+          call('start_tool', JSON.stringify({ tool: tool, params: params || {} }));
+        },
+
+        action: function(name) {
+          if (name === 'stretch') return this.tool('stretch');
+          call('action', name);
+        },
+
+        showSelection: function(sel, count) {
+          $('selEmpty').classList.toggle('hidden', !!sel);
+          $('selBox').classList.toggle('hidden', !sel);
+          if (!sel) {
+            $('selEmpty').textContent = count ? 'A seleção não tem peça do plugin.' : 'Selecione uma estrutura, bandeja ou tubo do plugin.';
+            return;
+          }
+          var info = [], title = '';
+          var fix = (sel.fasteners || []).length ? 'Fixadores: ' + sel.fasteners.join(', ') : 'Sem fixadores';
+          if (sel.kind === 'parametric_frame') {
+            title = 'Gradil · ' + (sel.name || '');
+            info.push(fmt(sel.width_mm) + ' × ' + fmt(sel.height_mm) + ' mm · ' + sel.tubes + ' tubos · ' + fmt(sel.meters) + ' m', fix);
+          } else if (sel.kind === 'acm_tray') {
+            title = 'Bandeja ' + (sel.code || '') + ' · ' + (sel.name || '');
+            info.push(fmt(sel.width_mm) + ' × ' + fmt(sel.height_mm) + ' mm · ' + sel.cutouts + ' recorte(s)', fix);
+          } else {
+            title = 'Tubo · ' + (sel.name || '');
+            info.push((sel.profile_name || '') + ' · ' + fmt(sel.length_mm) + ' mm',
+                      'Cortes: ' + fmt(sel.cut_a_deg || 0) + '° / ' + fmt(sel.cut_b_deg || 0) + '°');
+          }
+          if (count > 1) info.push(count + ' itens selecionados (editando o primeiro)');
+          $('selTitle').textContent = title;
+          $('selInfo').innerHTML = info.map(function(t) { return String(t).replace(/</g, '&lt;'); }).join('<br>');
+
+          var editable = sel.kind !== 'single_tube';
+          $('selEdit').classList.toggle('hidden', !editable);
+          $('selTravRow').classList.toggle('hidden', sel.kind !== 'parametric_frame');
+          $('selCodeRow').classList.toggle('hidden', sel.kind !== 'acm_tray');
+          $('selNameRow').classList.toggle('hidden', sel.kind !== 'parametric_frame');
+          if (editable) {
+            $('sW').value = num(sel.width_mm);
+            $('sH').value = num(sel.height_mm);
+            $('sName').value = sel.name || '';
+            $('sNameT').value = sel.name || '';
+            $('sCode').value = sel.code || '';
+            $('sTV').value = sel.trav_v_count;
+            $('sTH').value = sel.trav_h_count;
+          }
+          $('selActions').innerHTML = '';
+          (SEL_ACTIONS[sel.kind] || []).forEach(function(a) {
+            var b = document.createElement('button');
+            b.textContent = a[1];
+            b.onclick = function() { S.action(a[0]); };
+            $('selActions').appendChild(b);
+          });
+        },
+
+        apply: function() {
+          var sel = this.state && this.state.selection;
+          if (!sel) return;
+          var data = { width_mm: Number($('sW').value), height_mm: Number($('sH').value) };
+          if (sel.kind === 'parametric_frame') {
+            data.name = $('sName').value;
+            data.trav_v_count = Number($('sTV').value);
+            data.trav_h_count = Number($('sTH').value);
+          } else {
+            data.name = $('sNameT').value;
+            data.code = $('sCode').value;
+          }
+          call('apply_selected', JSON.stringify(data));
+        },
+
+        status: function(msg) {
+          var el = $('status');
+          el.textContent = msg || '';
+          el.className = /^Erro/.test(msg || '') ? '' : 'ok';
+        }
+      };
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && e.target.closest && e.target.closest('#selEdit')) S.apply();
+      });
+      S.tab('frame');
+      call('ready', String(window.screen.availWidth || 0));
+    })();
+  </script>
+</body>
+</html>
